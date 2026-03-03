@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 
-function generateStrongPassword(options = {}) {
+export function generateStrongPassword(options = {}) {
     const {
         length = 18,
         useLowercase = true,
@@ -57,7 +57,3 @@ function generateStrongPassword(options = {}) {
 
     return passwordArray.join('');
 }
-
-// Test it out
-console.log("Guaranteed Mix:", generateStrongPassword());
-console.log("Strict Length (8), No Symbols:", generateStrongPassword({ length: 8, useSymbols: false }));
