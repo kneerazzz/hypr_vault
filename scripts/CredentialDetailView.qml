@@ -561,35 +561,43 @@ Item {
         }
     }
 
+    Timer {
+        id: startDecryptTimer
+        interval: 1
+        onTriggered: { decryptProcess.running = true }
+    }
+    Timer {
+        id: startUpdateTimer
+        interval: 1
+        onTriggered: { updateProcess.running = true }
+    }
+
     function decryptPassword() {
         if (!credential) return
         isDecrypting = true
-
-        const scriptDir = "/home/llyod/Documents/Projects/hypr_vault/src"
+        const scriptDir = "/home/llyod/Documents/Projects/hypr_vault/src/"
         decryptProcess.buf = ""
-        decryptProcess.environment = { "VAULT_MASTER": masterPassword }
+        decryptProcess.stdin = masterPassword + "\n"
         decryptProcess.command = ["node", scriptDir + "index.js", "get", String(credential.id), "--json"]
         decryptProcess.running = false
-        decryptProcess.running = true
+        startDecryptTimer.restart()
     }
 
     function saveUpdate() {
         if (!credential) return
         const scriptDir = "/home/llyod/Documents/Projects/hypr_vault/src/"
-
-        const svc = editService.currentValue || "SKIP"
-        const uname = editUsername.currentValue || "SKIP"
-        const mail = editEmail.currentValue || "SKIP"
-        const url = editUrl.currentValue || "SKIP"
+        const svc   = editService.currentValue   || "SKIP"
+        const uname = editUsername.currentValue  || "SKIP"
+        const mail  = editEmail.currentValue     || "SKIP"
+        const url   = editUrl.currentValue       || "SKIP"
         const newPass = editPassword.currentValue || "SKIP"
-
-        updateProcess.environment = { "VAULT_MASTER": masterPassword }
+        updateProcess.stdin = masterPassword + "\n"
         updateProcess.command = [
             "node", scriptDir + "index.js", "update",
             String(credential.id),
             svc, uname, mail, url, newPass
         ]
         updateProcess.running = false
-        updateProcess.running = true
+        startUpdateTimer.restart()
     }
 }

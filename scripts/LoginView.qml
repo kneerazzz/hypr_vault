@@ -8,7 +8,6 @@ Item {
 
     property bool shaking: false
 
-    // Shake animation
     SequentialAnimation {
         id: shakeAnim
         running: loginRoot.shaking
@@ -98,7 +97,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: "enter master password"
-            color: "#3a3a3a"
+            color: "#555555"
             font.pixelSize: 11
             font.family: "monospace"
             font.letterSpacing: 1.5
@@ -168,7 +167,7 @@ Item {
             Text {
                 anchors.centerIn: parent
                 text: "UNLOCK"
-                color: "#888888"
+                color: "#aaaaaa"
                 font.pixelSize: 11
                 font.family: "monospace"
                 font.letterSpacing: 3
@@ -191,7 +190,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: "secrets worth dying for"
-            color: "#1f1f1f"
+            color: "#999999"
             font.pixelSize: 10
             font.family: "monospace"
             font.letterSpacing: 2

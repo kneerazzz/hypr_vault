@@ -134,17 +134,34 @@ Item {
             color: "#090909"
             clip: true
 
-            Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+            states: [
+                State {
+                    name: "shown"
+                    when: filterPanel.visible
+                    PropertyChanges { target: filterPanel; height: 96 }
+                },
+                State {
+                    name: "hidden"
+                    when: !filterPanel.visible
+                    PropertyChanges { target: filterPanel; height: 0 }
+                }
+            ]
+            transitions: [
+                Transition {
+                    from: "hidden"; to: "shown"
+                    NumberAnimation { properties: "height"; duration: 200; easing.type: Easing.OutCubic }
+                },
+                Transition {
+                    from: "shown"; to: "hidden"
+                    NumberAnimation { properties: "height"; duration: 200; easing.type: Easing.OutCubic }
+                }
+            ]
 
             Rectangle {
                 anchors.bottom: parent.bottom
                 width: parent.width
                 height: 1
                 color: "#161616"
-            }
-
-            onVisibleChanged: {
-                height = visible ? 96 : 0
             }
 
             Column {

@@ -14,6 +14,7 @@ Item {
     property var selectedCredential: null
     property string statusMessage: ""
     property bool isLoading: false
+    property bool isLoggingIn: false  // Guard to prevent multiple login attempts
 
     // Node script path (adjust if needed)
     readonly property string scriptDir: "/home/llyod/Documents/Projects/hypr_vault/src/"
@@ -149,10 +150,6 @@ Item {
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
                     onLoginRequested: (pass) => {
-                        console.log("scriptDir =", root.scriptDir)
-                        console.log("command =", root.scriptDir + "index.js")
-                        root.masterPassword = pass
-                        loadCredentials()
                         attemptLogin(pass)
                     }
                 }
@@ -191,7 +188,6 @@ Item {
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
                     credential: root.selectedCredential
-                    masterPassword: root.masterPassword
 
                     onDeleteRequested: (id, pass) => {
                         deleteCredential(id, pass)
@@ -208,7 +204,6 @@ Item {
                     opacity: root.currentView === "addform" ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
-                    masterPassword: root.masterPassword
 
                     onCancelled: {
                         root.currentView = "list"
@@ -250,10 +245,11 @@ Item {
     }
 
     // Process for listing credentials
+
+    // List process — command set imperatively in timer
     Process {
         id: listProcess
         property string buf: ""
-        command: ["node", root.scriptDir + "index.js", "list", "--json"]
 
         stdout: SplitParser {
             onRead: data => listProcess.buf += data
@@ -276,7 +272,7 @@ Item {
         }
     }
 
-    // Process for filtering credentials
+    // Filter process — command set imperatively in timer
     Process {
         id: filterProcess
         property string buf: ""
@@ -286,8 +282,6 @@ Item {
         stdout: SplitParser {
             onRead: data => filterProcess.buf += data
         }
-
-        command: ["node", root.scriptDir + "index.js", "filter", filterType, filterQuery, "--json"]
 
         onExited: (code) => {
             root.isLoading = false
@@ -303,6 +297,7 @@ Item {
         }
     }
 
+    // Login process
     Process {
         id: loginProcess
         property string buf: ""
@@ -313,10 +308,10 @@ Item {
 
         onExited: (code) => {
             loginProcess.buf = ""
+            root.isLoggingIn = false  // Reset guard flag
             if (code === 0) {
-                listProcess.buf = ""
-                listProcess.running = false
-                listProcess.running = true
+                root.masterPassword = startLoginTimer.loginPassword
+                startListTimer.restart()
             } else {
                 root.isLoading = false
                 root.masterPassword = ""
@@ -327,11 +322,10 @@ Item {
         }
     }
 
-    // Process for deleting
+    // Delete process
     Process {
         id: deleteProcess
         stdout: SplitParser { onRead: data => {} }
-        property int targetId: -1
 
         onExited: (code) => {
             if (code === 0) {
@@ -346,46 +340,79 @@ Item {
         }
     }
 
+    Timer {
+        id: statusClearTimer
+        interval: 2000
+        onTriggered: root.statusMessage = ""
+    }
 
-
+    // All running=true calls are ONLY inside timers — never synchronously
     Timer {
         id: startListTimer
-        interval: 1
+        interval: 10
         onTriggered: {
             listProcess.buf = ""
+            listProcess.command = ["node", root.scriptDir + "index.js", "list", "--json"]
             listProcess.running = true
         }
     }
 
+    Timer {
+        id: startFilterTimer
+        interval: 10
+        onTriggered: {
+            filterProcess.buf = ""
+            filterProcess.command = [
+                "node", root.scriptDir + "index.js",
+                "filter", filterProcess.filterType, filterProcess.filterQuery, "--json"
+            ]
+            filterProcess.running = true
+        }
+    }
+
+    Timer {
+        id: startLoginTimer
+        interval: 10
+        property string loginPassword: ""
+        onTriggered: {
+            loginProcess.buf = ""
+            loginProcess.command = ["node", root.scriptDir + "index.js", "login", "--json"]
+            loginProcess.stdin = loginPassword + "\n"
+            loginProcess.running = true
+        }
+    }
+
+    Timer {
+        id: startDeleteTimer
+        interval: 10
+        onTriggered: { deleteProcess.running = true }
+    }
+
     function loadCredentials() {
         root.isLoading = true
-        listProcess.running = false
         startListTimer.restart()
     }
 
     function filterCredentials(type, query) {
         root.isLoading = true
-        filterProcess.buf = ""
         filterProcess.filterType = type
         filterProcess.filterQuery = query
-        filterProcess.running = false
-        filterProcess.running = true
+        startFilterTimer.restart()
     }
 
     function deleteCredential(id, pass) {
-        deleteProcess.environment = { "VAULT_MASTER": pass }
+        deleteProcess.stdin = pass + "\n"
         deleteProcess.command = ["node", root.scriptDir + "index.js", "delete", String(id)]
-        deleteProcess.running = false
-        deleteProcess.running = true
+        startDeleteTimer.restart()
     }
 
     function attemptLogin(pass) {
+        if (root.isLoggingIn) return
+
+        root.isLoggingIn = true
         root.isLoading = true
-        root.masterPassword = pass
-        loginProcess.buf = ""
-        loginProcess.environment = { "VAULT_MASTER": pass }
-        loginProcess.command = ["node", root.scriptDir + "index.js", "login", "--json"]
-        loginProcess.running = false
-        loginProcess.running = true
+
+        startLoginTimer.loginPassword = pass
+        startLoginTimer.restart()
     }
 }

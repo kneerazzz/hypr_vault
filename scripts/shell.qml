@@ -13,7 +13,7 @@ ShellRoot {
             bottom: true
         }
 
-        implicitWidth: 380
+        implicitWidth: 480
         color: "transparent"
         exclusiveZone: visible ? width : 0
 

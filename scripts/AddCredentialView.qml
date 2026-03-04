@@ -276,12 +276,18 @@ Item {
 
         addRoot.isGenerating = true
         addProcess.buf = ""
-        addProcess.environment = { "VAULT_MASTER": masterPassword }
+        addProcess.stdin = masterPassword + "\n"
         addProcess.command = [
             "node", scriptDir + "index.js", "add",
             svc, uname, email, url, pass
         ]
         addProcess.running = false
-        addProcess.running = true
+        startAddTimer.restart()
+    }
+
+    Timer {
+        id: startAddTimer
+        interval: 1
+        onTriggered: { addProcess.running = true }
     }
 }
