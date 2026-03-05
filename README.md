@@ -62,7 +62,7 @@ bash /home/llyod/Documents/Projects/hypr_vault/launch.sh
 Add to `~/.config/hypr/hyprland.conf`:
 
 ```conf
-bind = $mainMod, V, exec, bash /home/llyod/Documents/Projects/hypr_vault/launch.sh
+bind = $mainMod, H, exec, bash /home/llyod/Documents/Projects/hypr_vault/launch.sh
 ```
 
 ---
