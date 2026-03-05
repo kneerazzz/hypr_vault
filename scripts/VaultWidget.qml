@@ -1,32 +1,28 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 
 Item {
     id: root
 
-    // State: "login" | "list" | "detail"
-    property string currentView: "login"
-    property string masterPassword: ""
-    property var credentials: []
-    property var selectedCredential: null
-    property string statusMessage: ""
-    property bool isLoading: false
-    property bool isLoggingIn: false  // Guard to prevent multiple login attempts
+    // Views: "login" | "list" | "detail" | "addform"
+    property string currentView:        "login"
+    property string masterPassword:     ""
+    property var    credentials:        []
+    property var    selectedCredential: null
+    property string statusMessage:      ""
+    property bool   isLoading:          false
 
-    // Node script path (adjust if needed)
     readonly property string scriptDir: "/home/llyod/Documents/Projects/hypr_vault/src/"
 
+    // ── Root background ────────────────────────────────────────────
     Rectangle {
         anchors.fill: parent
         color: "#0a0a0a"
 
-        // Subtle noise texture overlay
         Rectangle {
             anchors.fill: parent
-            color: "transparent"
             opacity: 0.04
             gradient: Gradient {
                 orientation: Gradient.Horizontal
@@ -35,21 +31,16 @@ Item {
                 GradientStop { position: 1.0; color: "#ffffff" }
             }
         }
-
-        // Left edge accent line
         Rectangle {
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: 1
-            color: "#1f1f1f"
+            anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+            width: 1; color: "#1f1f1f"
         }
 
         ColumnLayout {
             anchors.fill: parent
             spacing: 0
 
-            // Header bar
+            // ── Header ─────────────────────────────────────────────
             Rectangle {
                 Layout.fillWidth: true
                 height: 56
@@ -57,158 +48,110 @@ Item {
 
                 Rectangle {
                     anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: "#1a1a1a"
+                    width: parent.width; height: 1; color: "#1a1a1a"
                 }
 
                 RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 16
+                    anchors { fill: parent; leftMargin: 20; rightMargin: 16 }
 
-                    // Back button
                     Rectangle {
                         visible: root.currentView !== "login"
-                        width: 28
-                        height: 28
-                        radius: 6
-                        color: backMouseArea.containsMouse ? "#1a1a1a" : "transparent"
+                        width: 28; height: 28; radius: 6
+                        color: backArea.containsMouse ? "#1a1a1a" : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
 
                         Text {
                             anchors.centerIn: parent
-                            text: "←"
-                            color: "#666666"
-                            font.pixelSize: 16
-                            font.family: "monospace"
+                            text: "←"; color: "#666666"
+                            font { pixelSize: 16; family: "monospace" }
                         }
-
                         MouseArea {
-                            id: backMouseArea
+                            id: backArea
                             anchors.fill: parent
                             hoverEnabled: true
-                            onClicked: {
-                                if (root.currentView === "detail") {
-                                    root.currentView = "list"
-                                    root.selectedCredential = null
-                                } else if (root.currentView === "list") {
-                                    root.currentView = "login"
-                                    root.masterPassword = ""
-                                    root.credentials = []
-                                }
-                            }
+                            onClicked: navigateBack()
                         }
                     }
 
                     Item { width: root.currentView !== "login" ? 8 : 0 }
 
-                    // Logo / title
                     RowLayout {
                         spacing: 8
-
                         Rectangle {
-                            width: 8
-                            height: 8
-                            radius: 2
-                            color: "#e2e2e2"
-                            rotation: 45
+                            width: 8; height: 8; radius: 2
+                            color: "#e2e2e2"; rotation: 45
                         }
-
                         Text {
                             text: "HYPR-VAULT"
                             color: "#e8e8e8"
-                            font.pixelSize: 13
-                            font.family: "monospace"
-                            font.letterSpacing: 3
-                            font.weight: Font.Medium
+                            font { pixelSize: 13; family: "monospace"; letterSpacing: 3; weight: Font.Medium }
                         }
                     }
 
                     Item { Layout.fillWidth: true }
 
-                    // Status indicator
                     Rectangle {
-                        width: 6
-                        height: 6
-                        radius: 3
+                        width: 6; height: 6; radius: 3
                         color: root.currentView === "login" ? "#333333" : "#4ade80"
                         Behavior on color { ColorAnimation { duration: 400 } }
                     }
                 }
             }
 
-            // View container
+            // ── View container ─────────────────────────────────────
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
                 LoginView {
+                    id: loginView
                     anchors.fill: parent
-                    visible: root.currentView === "login"
-                    opacity: root.currentView === "login" ? 1 : 0
+                    visible:  root.currentView === "login"
+                    opacity:  root.currentView === "login" ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
-
-                    onLoginRequested: (pass) => {
-                        attemptLogin(pass)
-                    }
+                    onLoginRequested: (pass) => attemptLogin(pass)
                 }
 
                 VaultListView {
                     anchors.fill: parent
-                    visible: root.currentView === "list"
-                    opacity: root.currentView === "list" ? 1 : 0
+                    visible:  root.currentView === "list"
+                    opacity:  root.currentView === "list" ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
                     credentials: root.credentials
-                    isLoading: root.isLoading
+                    isLoading:   root.isLoading
 
                     onCredentialSelected: (cred) => {
                         root.selectedCredential = cred
                         root.currentView = "detail"
                     }
-
-                    onAddRequested: {
-                        root.currentView = "addform"
-                    }
-
-                    onFilterRequested: (type, query) => {
-                        filterCredentials(type, query)
-                    }
-
-                    onResetFilter: {
-                        loadCredentials()
-                    }
+                    onAddRequested:    { root.currentView = "addform" }
+                    onFilterRequested: (type, query) => filterCredentials(type, query)
+                    onResetFilter:     loadCredentials()
                 }
 
                 CredentialDetailView {
                     anchors.fill: parent
-                    visible: root.currentView === "detail"
-                    opacity: root.currentView === "detail" ? 1 : 0
+                    visible:  root.currentView === "detail"
+                    opacity:  root.currentView === "detail" ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
-                    credential: root.selectedCredential
+                    credential:     root.selectedCredential
+                    masterPassword: root.masterPassword
 
-                    onDeleteRequested: (id, pass) => {
-                        deleteCredential(id, pass)
-                    }
-
-                    onUpdateRequested: (id, service, username, email, url, pass) => {
-                        updateCredential(id, service, username, email, url, pass)
-                    }
+                    onDeleteRequested: (id) => deleteCredential(id)
+                    onUpdateRequested: () => handleUpdateDone()
                 }
 
                 AddCredentialView {
                     anchors.fill: parent
-                    visible: root.currentView === "addform"
-                    opacity: root.currentView === "addform" ? 1 : 0
+                    visible:  root.currentView === "addform"
+                    opacity:  root.currentView === "addform" ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
+                    masterPassword: root.masterPassword
 
-                    onCancelled: {
-                        root.currentView = "list"
-                    }
-
+                    onCancelled: root.currentView = "list"
                     onSaved: {
                         root.currentView = "list"
                         loadCredentials()
@@ -216,55 +159,103 @@ Item {
                 }
             }
 
-            // Status bar
+            // ── Status bar ─────────────────────────────────────────
             Rectangle {
                 Layout.fillWidth: true
                 height: root.statusMessage !== "" ? 36 : 0
                 color: "#0d0d0d"
                 clip: true
-
                 Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
                 Rectangle {
                     anchors.top: parent.top
-                    width: parent.width
-                    height: 1
-                    color: "#161616"
+                    width: parent.width; height: 1; color: "#161616"
                 }
-
                 Text {
                     anchors.centerIn: parent
                     text: root.statusMessage
                     color: "#666666"
-                    font.pixelSize: 11
-                    font.family: "monospace"
-                    font.letterSpacing: 1
+                    font { pixelSize: 11; family: "monospace"; letterSpacing: 1 }
                 }
             }
         }
     }
 
-    // Process for listing credentials
+    // ═══════════════════════════════════════════════════════════════
+    // PROCESSES
+    // Master password is passed via VAULT_MASTER_KEY env var.
+    // - Invisible to `ps aux` (not in argv)
+    // - Scoped only to the spawned child process
+    // - Quickshell Process.environment sets vars for that run only
+    // ═══════════════════════════════════════════════════════════════
 
-    // List process — command set imperatively in timer
+    // ── LOGIN ──────────────────────────────────────────────────────
+    Process {
+        id: loginProcess
+        property string buf: ""
+
+        stdout: SplitParser { onRead: data => loginProcess.buf += data }
+        stderr: SplitParser { onRead: data => {} }
+
+        onExited: (code) => {
+            const buf = loginProcess.buf
+            loginProcess.buf = ""
+            loginView.busy = false
+
+            if (code === 0) {
+                root.masterPassword    = loginTimer.pendingPass
+                loginTimer.pendingPass = ""
+                loginView.clearField()
+                loadCredentials()
+            } else {
+                root.masterPassword    = ""
+                loginTimer.pendingPass = ""
+                loginView.errorText    = "incorrect password"
+                loginView.shaking      = true
+                errorClearTimer.restart()
+            }
+        }
+    }
+
+    Timer {
+        id: loginTimer
+        interval: 10
+        property string pendingPass: ""
+
+        onTriggered: {
+            loginProcess.buf         = ""
+            loginProcess.environment = ({ "VAULT_MASTER_KEY": pendingPass })
+            loginProcess.command     = ["node", root.scriptDir + "index.js", "login"]
+            loginProcess.running     = true
+        }
+    }
+
+    Timer {
+        id: errorClearTimer
+        interval: 2500
+        onTriggered: loginView.errorText = ""
+    }
+
+    // ── LIST — no password needed ──────────────────────────────────
     Process {
         id: listProcess
         property string buf: ""
 
-        stdout: SplitParser {
-            onRead: data => listProcess.buf += data
-        }
+        stdout: SplitParser { onRead: data => listProcess.buf += data }
+        stderr: SplitParser { onRead: data => {} }
 
         onExited: (code) => {
             root.isLoading = false
+            const buf = listProcess.buf
+            listProcess.buf = ""
+
             if (code === 0) {
                 try {
-                    root.credentials = JSON.parse(listProcess.buf.trim())
-                    listProcess.buf = ""
-                    root.currentView = "list"
+                    root.credentials   = JSON.parse(buf.trim())
+                    root.currentView   = "list"
                     root.statusMessage = ""
                 } catch (e) {
-                    root.statusMessage = "parse error"
+                    root.statusMessage = "parse error: " + e.message
                 }
             } else {
                 root.statusMessage = "failed to load vault"
@@ -272,147 +263,140 @@ Item {
         }
     }
 
-    // Filter process — command set imperatively in timer
-    Process {
-        id: filterProcess
-        property string buf: ""
-        property string filterType: ""
-        property string filterQuery: ""
-
-        stdout: SplitParser {
-            onRead: data => filterProcess.buf += data
-        }
-
-        onExited: (code) => {
-            root.isLoading = false
-            if (code === 0) {
-                try {
-                    root.credentials = JSON.parse(filterProcess.buf.trim())
-                    filterProcess.buf = ""
-                    root.statusMessage = ""
-                } catch (e) {
-                    root.statusMessage = "filter parse error"
-                }
-            }
-        }
-    }
-
-    // Login process
-    Process {
-        id: loginProcess
-        property string buf: ""
-
-        stdout: SplitParser {
-            onRead: data => loginProcess.buf += data
-        }
-
-        onExited: (code) => {
-            loginProcess.buf = ""
-            root.isLoggingIn = false  // Reset guard flag
-            if (code === 0) {
-                root.masterPassword = startLoginTimer.loginPassword
-                startListTimer.restart()
-            } else {
-                root.isLoading = false
-                root.masterPassword = ""
-                root.currentView = "login"
-                root.statusMessage = "wrong password"
-                statusClearTimer.restart()
-            }
-        }
-    }
-
-    // Delete process
-    Process {
-        id: deleteProcess
-        stdout: SplitParser { onRead: data => {} }
-
-        onExited: (code) => {
-            if (code === 0) {
-                root.statusMessage = "deleted"
-                root.currentView = "list"
-                root.selectedCredential = null
-                loadCredentials()
-                statusClearTimer.restart()
-            } else {
-                root.statusMessage = "delete failed"
-            }
-        }
-    }
-
     Timer {
-        id: statusClearTimer
-        interval: 2000
-        onTriggered: root.statusMessage = ""
-    }
-
-    // All running=true calls are ONLY inside timers — never synchronously
-    Timer {
-        id: startListTimer
+        id: listTimer
         interval: 10
         onTriggered: {
-            listProcess.buf = ""
+            listProcess.buf     = ""
             listProcess.command = ["node", root.scriptDir + "index.js", "list", "--json"]
             listProcess.running = true
         }
     }
 
+    // ── FILTER — no password needed ────────────────────────────────
+    Process {
+        id: filterProcess
+        property string buf:    ""
+        property string fType:  ""
+        property string fQuery: ""
+
+        stdout: SplitParser { onRead: data => filterProcess.buf += data }
+        stderr: SplitParser { onRead: data => {} }
+
+        onExited: (code) => {
+            root.isLoading = false
+            const buf = filterProcess.buf
+            filterProcess.buf = ""
+
+            if (code === 0) {
+                try {
+                    root.credentials   = JSON.parse(buf.trim())
+                    root.statusMessage = ""
+                } catch (e) {
+                    root.statusMessage = "filter parse error"
+                }
+            } else {
+                root.statusMessage = "filter failed"
+            }
+        }
+    }
+
     Timer {
-        id: startFilterTimer
+        id: filterTimer
         interval: 10
         onTriggered: {
-            filterProcess.buf = ""
+            filterProcess.buf     = ""
             filterProcess.command = [
                 "node", root.scriptDir + "index.js",
-                "filter", filterProcess.filterType, filterProcess.filterQuery, "--json"
+                "filter", filterProcess.fType, filterProcess.fQuery, "--json"
             ]
             filterProcess.running = true
         }
     }
 
-    Timer {
-        id: startLoginTimer
-        interval: 10
-        property string loginPassword: ""
-        onTriggered: {
-            loginProcess.buf = ""
-            loginProcess.command = ["node", root.scriptDir + "index.js", "login", "--json"]
-            loginProcess.stdin = loginPassword + "\n"
-            loginProcess.running = true
+    // ── DELETE ─────────────────────────────────────────────────────
+    Process {
+        id: deleteProcess
+        stdout: SplitParser { onRead: data => {} }
+        stderr: SplitParser { onRead: data => {} }
+
+        onExited: (code) => {
+            if (code === 0) {
+                root.selectedCredential = null
+                root.currentView        = "list"
+                root.statusMessage      = "credential deleted"
+                loadCredentials()
+                statusClearTimer.restart()
+            } else {
+                root.statusMessage = "delete failed"
+                statusClearTimer.restart()
+            }
         }
     }
 
     Timer {
-        id: startDeleteTimer
+        id: deleteTimer
         interval: 10
-        onTriggered: { deleteProcess.running = true }
+        property string pendingId: ""
+
+        onTriggered: {
+            deleteProcess.environment = ({ "VAULT_MASTER_KEY": root.masterPassword })
+            deleteProcess.command     = ["node", root.scriptDir + "index.js", "delete", pendingId]
+            deleteProcess.running     = true
+        }
+    }
+
+    Timer {
+        id: statusClearTimer
+        interval: 2200
+        onTriggered: root.statusMessage = ""
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+
+    function attemptLogin(pass) {
+        if (loginProcess.running) return
+        loginView.busy         = true
+        loginView.errorText    = ""
+        loginTimer.pendingPass = pass
+        loginTimer.restart()
     }
 
     function loadCredentials() {
         root.isLoading = true
-        startListTimer.restart()
+        listTimer.restart()
     }
 
     function filterCredentials(type, query) {
-        root.isLoading = true
-        filterProcess.filterType = type
-        filterProcess.filterQuery = query
-        startFilterTimer.restart()
+        root.isLoading       = true
+        filterProcess.fType  = type
+        filterProcess.fQuery = query
+        filterTimer.restart()
     }
 
-    function deleteCredential(id, pass) {
-        deleteProcess.stdin = pass + "\n"
-        deleteProcess.command = ["node", root.scriptDir + "index.js", "delete", String(id)]
-        startDeleteTimer.restart()
+    function deleteCredential(id) {
+        deleteTimer.pendingId = String(id)
+        deleteTimer.restart()
     }
 
-    function attemptLogin(pass) {
-        if (root.isLoggingIn) return
+    function handleUpdateDone() {
+        root.selectedCredential = null
+        root.currentView        = "list"
+        root.statusMessage      = "credential updated"
+        loadCredentials()
+        statusClearTimer.restart()
+    }
 
-        root.isLoggingIn = true
-        root.isLoading = true
-
-        startLoginTimer.loginPassword = pass
-        startLoginTimer.restart()
+    function navigateBack() {
+        if (root.currentView === "detail" || root.currentView === "addform") {
+            root.currentView        = "list"
+            root.selectedCredential = null
+        } else if (root.currentView === "list") {
+            root.currentView    = "login"
+            root.masterPassword = ""
+            root.credentials    = []
+        }
     }
 }

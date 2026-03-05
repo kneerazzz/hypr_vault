@@ -5,20 +5,23 @@ import QtQuick.Controls
 Item {
     id: listRoot
 
-    property var credentials: []
-    property bool isLoading: false
-    property bool filterActive: false
+    property var  credentials:   []
+    property bool isLoading:     false
+    property bool filterActive:  false
 
     signal credentialSelected(var credential)
     signal addRequested()
     signal filterRequested(string type, string query)
     signal resetFilter()
 
+    // ── Filter type state lives at Item scope, not inside Row ──────
+    property string selectedFilterType: "service"
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // Action bar
+        // ── Action bar ─────────────────────────────────────────────
         Rectangle {
             Layout.fillWidth: true
             height: 52
@@ -26,39 +29,31 @@ Item {
 
             Rectangle {
                 anchors.bottom: parent.bottom
-                width: parent.width
-                height: 1
+                width: parent.width; height: 1
                 color: "#161616"
             }
 
             RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
+                anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
                 spacing: 8
 
                 // Filter toggle
                 Rectangle {
-                    id: filterToggle
-                    width: 36
-                    height: 32
-                    radius: 6
-                    color: listRoot.filterActive
-                        ? "#1a1a1a"
-                        : (filterToggleArea.containsMouse ? "#141414" : "transparent")
-                    border.color: listRoot.filterActive ? "#2a2a2a" : "transparent"
+                    width: 36; height: 32; radius: 6
+                    color: filterPanel.visible
+                           ? "#1a1a1a"
+                           : (filterToggleArea.containsMouse ? "#141414" : "transparent")
+                    border.color: filterPanel.visible ? "#2a2a2a" : "transparent"
                     border.width: 1
-
                     Behavior on color { ColorAnimation { duration: 120 } }
 
                     Text {
                         anchors.centerIn: parent
                         text: "⊟"
-                        color: listRoot.filterActive ? "#aaaaaa" : "#444444"
+                        color: filterPanel.visible ? "#aaaaaa" : "#444444"
                         font.pixelSize: 14
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
-
                     MouseArea {
                         id: filterToggleArea
                         anchors.fill: parent
@@ -68,15 +63,13 @@ Item {
                     }
                 }
 
-                // Count / status
+                // Entry count
                 Text {
                     text: listRoot.filterActive
-                        ? listRoot.credentials.length + " filtered"
-                        : listRoot.credentials.length + " entries"
+                          ? listRoot.credentials.length + " filtered"
+                          : listRoot.credentials.length + " entries"
                     color: "#333333"
-                    font.pixelSize: 11
-                    font.family: "monospace"
-                    font.letterSpacing: 1
+                    font { pixelSize: 11; family: "monospace"; letterSpacing: 1 }
                 }
 
                 Item { Layout.fillWidth: true }
@@ -84,36 +77,20 @@ Item {
                 // Add button
                 Rectangle {
                     height: 32
-                    width: addBtnText.width + 24
+                    width: addLabel.width + 24
                     radius: 6
                     color: addArea.containsMouse ? "#1c1c1c" : "#141414"
                     border.color: addArea.containsMouse ? "#2a2a2a" : "#1a1a1a"
                     border.width: 1
-
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Behavior on color        { ColorAnimation { duration: 120 } }
                     Behavior on border.color { ColorAnimation { duration: 120 } }
 
-                    RowLayout {
+                    Row {
                         anchors.centerIn: parent
                         spacing: 6
-
-                        Text {
-                            text: "+"
-                            color: "#666666"
-                            font.pixelSize: 16
-                            font.family: "monospace"
-                        }
-
-                        Text {
-                            id: addBtnText
-                            text: "ADD"
-                            color: "#666666"
-                            font.pixelSize: 11
-                            font.family: "monospace"
-                            font.letterSpacing: 2
-                        }
+                        Text { text: "+"; color: "#666666"; font { pixelSize: 16; family: "monospace" } }
+                        Text { id: addLabel; text: "ADD"; color: "#666666"; font { pixelSize: 11; family: "monospace"; letterSpacing: 2 } }
                     }
-
                     MouseArea {
                         id: addArea
                         anchors.fill: parent
@@ -125,152 +102,120 @@ Item {
             }
         }
 
-        // Filter panel (collapsible)
+        // ── Filter panel ───────────────────────────────────────────
         Rectangle {
             id: filterPanel
             Layout.fillWidth: true
-            height: visible ? 96 : 0
+            height: 0
             visible: false
             color: "#090909"
             clip: true
 
-            states: [
-                State {
-                    name: "shown"
-                    when: filterPanel.visible
-                    PropertyChanges { target: filterPanel; height: 96 }
-                },
-                State {
-                    name: "hidden"
-                    when: !filterPanel.visible
-                    PropertyChanges { target: filterPanel; height: 0 }
+            onVisibleChanged: {
+                if (visible) {
+                    heightAnim.to = 100
+                } else {
+                    heightAnim.to = 0
                 }
-            ]
-            transitions: [
-                Transition {
-                    from: "hidden"; to: "shown"
-                    NumberAnimation { properties: "height"; duration: 200; easing.type: Easing.OutCubic }
-                },
-                Transition {
-                    from: "shown"; to: "hidden"
-                    NumberAnimation { properties: "height"; duration: 200; easing.type: Easing.OutCubic }
-                }
-            ]
+                heightAnim.restart()
+            }
+
+            NumberAnimation {
+                id: heightAnim
+                target: filterPanel
+                property: "height"
+                duration: 200
+                easing.type: Easing.OutCubic
+            }
 
             Rectangle {
                 anchors.bottom: parent.bottom
-                width: parent.width
-                height: 1
+                width: parent.width; height: 1
                 color: "#161616"
             }
 
             Column {
-                anchors.fill: parent
-                anchors.margins: 14
+                anchors { fill: parent; margins: 14 }
                 spacing: 8
 
-                // Filter type selector
+                // Filter type pills
                 Row {
                     spacing: 6
-
                     Repeater {
                         model: ["service", "username", "email"]
                         delegate: Rectangle {
+                            required property string modelData
                             height: 24
-                            width: filterTypeText.width + 16
+                            width: pillLabel.width + 16
                             radius: 4
-                            color: filterTypeGroup.selected === modelData
-                                ? "#1e1e1e"
-                                : (filterTypeHover.containsMouse ? "#141414" : "transparent")
-                            border.color: filterTypeGroup.selected === modelData
-                                ? "#2a2a2a"
-                                : "transparent"
+                            color: listRoot.selectedFilterType === modelData
+                                   ? "#1e1e1e"
+                                   : (pillArea.containsMouse ? "#141414" : "transparent")
+                            border.color: listRoot.selectedFilterType === modelData
+                                          ? "#2a2a2a" : "transparent"
                             border.width: 1
 
                             Text {
-                                id: filterTypeText
+                                id: pillLabel
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: filterTypeGroup.selected === modelData
-                                    ? "#aaaaaa"
-                                    : "#444444"
-                                font.pixelSize: 10
-                                font.family: "monospace"
-                                font.letterSpacing: 1
+                                color: listRoot.selectedFilterType === modelData
+                                       ? "#aaaaaa" : "#444444"
+                                font { pixelSize: 10; family: "monospace"; letterSpacing: 1 }
                             }
-
                             MouseArea {
-                                id: filterTypeHover
+                                id: pillArea
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: filterTypeGroup.selected = modelData
+                                onClicked: listRoot.selectedFilterType = modelData
                             }
                         }
                     }
                 }
 
-                // Filter input row
+                // Search input + GO
                 Row {
                     width: parent.width
                     spacing: 8
 
-                    // Type selection state
-                    QtObject {
-                        id: filterTypeGroup
-                        property string selected: "service"
-                    }
-
                     Rectangle {
-                        width: parent.width - 60
-                        height: 32
-                        radius: 5
+                        width: parent.width - 58; height: 32; radius: 5
                         color: "#0f0f0f"
                         border.color: filterInput.activeFocus ? "#222222" : "#161616"
                         border.width: 1
 
                         TextInput {
                             id: filterInput
-                            anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
-                            anchors.verticalCenter: parent.verticalCenter
+                            anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
+                            verticalAlignment: TextInput.AlignVCenter
                             color: "#cccccc"
-                            font.pixelSize: 12
-                            font.family: "monospace"
+                            font { pixelSize: 12; family: "monospace" }
                             clip: true
+                            Keys.onReturnPressed: doFilter()
 
                             Text {
                                 anchors.fill: parent
-                                anchors.verticalCenter: parent.verticalCenter
+                                verticalAlignment: Text.AlignVCenter
                                 text: "search..."
                                 color: "#2a2a2a"
-                                font.pixelSize: 12
-                                font.family: "monospace"
+                                font { pixelSize: 12; family: "monospace" }
                                 visible: filterInput.text.length === 0
                             }
-
-                            Keys.onReturnPressed: doFilter()
                         }
                     }
 
                     Rectangle {
-                        width: 48
-                        height: 32
-                        radius: 5
+                        width: 46; height: 32; radius: 5
                         color: goArea.containsMouse ? "#1a1a1a" : "#111111"
-                        border.color: "#1a1a1a"
-                        border.width: 1
+                        border.color: "#1a1a1a"; border.width: 1
 
                         Text {
                             anchors.centerIn: parent
                             text: "GO"
                             color: "#555555"
-                            font.pixelSize: 10
-                            font.family: "monospace"
-                            font.letterSpacing: 2
+                            font { pixelSize: 10; family: "monospace"; letterSpacing: 2 }
                         }
-
                         MouseArea {
                             id: goArea
                             anchors.fill: parent
@@ -281,15 +226,12 @@ Item {
                     }
                 }
 
-                // Clear filter
+                // Clear filter link
                 Text {
                     visible: listRoot.filterActive
                     text: "✕ clear filter"
                     color: "#333333"
-                    font.pixelSize: 10
-                    font.family: "monospace"
-                    font.letterSpacing: 1
-
+                    font { pixelSize: 10; family: "monospace"; letterSpacing: 1 }
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
@@ -303,41 +245,35 @@ Item {
             }
         }
 
-        // Credentials list
+        // ── Credentials list ───────────────────────────────────────
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            // Loading state
+            // Loading spinner
             Column {
                 anchors.centerIn: parent
                 spacing: 12
                 visible: listRoot.isLoading
 
                 Item {
-                    width: 20
-                    height: 20
+                    width: 20; height: 20
                     anchors.horizontalCenter: parent.horizontalCenter
 
                     Rectangle {
                         anchors.fill: parent
                         radius: 10
                         color: "transparent"
-                        border.color: "#222222"
-                        border.width: 2
+                        border.color: "#222222"; border.width: 2
 
                         Rectangle {
-                            width: 6
-                            height: 6
-                            radius: 3
+                            width: 6; height: 6; radius: 3
                             color: "#555555"
-                            anchors.top: parent.top
-                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
                         }
 
                         RotationAnimator on rotation {
-                            from: 0
-                            to: 360
+                            from: 0; to: 360
                             duration: 1200
                             loops: Animation.Infinite
                             running: listRoot.isLoading
@@ -347,11 +283,9 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "decrypting..."
+                    text: "loading..."
                     color: "#2a2a2a"
-                    font.pixelSize: 11
-                    font.family: "monospace"
-                    font.letterSpacing: 2
+                    font { pixelSize: 11; family: "monospace"; letterSpacing: 2 }
                 }
             }
 
@@ -363,20 +297,15 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "vault is empty"
+                    text: listRoot.filterActive ? "no matches" : "vault is empty"
                     color: "#222222"
-                    font.pixelSize: 13
-                    font.family: "monospace"
-                    font.letterSpacing: 2
+                    font { pixelSize: 13; family: "monospace"; letterSpacing: 2 }
                 }
-
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "add your first secret"
+                    text: listRoot.filterActive ? "try a different query" : "add your first secret"
                     color: "#1a1a1a"
-                    font.pixelSize: 10
-                    font.family: "monospace"
-                    font.letterSpacing: 1.5
+                    font { pixelSize: 10; family: "monospace"; letterSpacing: 1.5 }
                 }
             }
 
@@ -390,16 +319,11 @@ Item {
 
                 ScrollBar.vertical: ScrollBar {
                     policy: ScrollBar.AsNeeded
-
                     contentItem: Rectangle {
-                        implicitWidth: 2
-                        radius: 1
+                        implicitWidth: 2; radius: 1
                         color: "#222222"
                     }
-
-                    background: Rectangle {
-                        color: "transparent"
-                    }
+                    background: Rectangle { color: "transparent" }
                 }
 
                 delegate: Rectangle {
@@ -409,23 +333,18 @@ Item {
                     width: ListView.view.width
                     height: 56
                     color: itemArea.containsMouse ? "#0f0f0f" : "transparent"
-
                     Behavior on color { ColorAnimation { duration: 100 } }
 
+                    // Separator
                     Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 16
+                        anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: 16; rightMargin: 16 }
                         height: 1
                         color: "#111111"
                     }
 
-                    // Left service color indicator
+                    // Hover accent bar
                     Rectangle {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
+                        anchors { left: parent.left; verticalCenter: parent.verticalCenter }
                         width: 2
                         height: itemArea.containsMouse ? 28 : 0
                         color: "#333333"
@@ -433,28 +352,21 @@ Item {
                     }
 
                     Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 16
+                        anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
                         spacing: 12
 
-                        // Service initial badge
+                        // Avatar badge
                         Rectangle {
-                            width: 32
-                            height: 32
-                            radius: 6
+                            width: 32; height: 32; radius: 6
                             anchors.verticalCenter: parent.verticalCenter
                             color: "#0f0f0f"
-                            border.color: "#1a1a1a"
-                            border.width: 1
+                            border.color: "#1a1a1a"; border.width: 1
 
                             Text {
                                 anchors.centerIn: parent
                                 text: (modelData.service || "?").charAt(0).toUpperCase()
                                 color: "#555555"
-                                font.pixelSize: 13
-                                font.family: "monospace"
-                                font.weight: Font.Medium
+                                font { pixelSize: 13; family: "monospace"; weight: Font.Medium }
                             }
                         }
 
@@ -465,18 +377,14 @@ Item {
                             Text {
                                 text: modelData.service || "—"
                                 color: "#d0d0d0"
-                                font.pixelSize: 12
-                                font.family: "monospace"
-                                font.weight: Font.Medium
+                                font { pixelSize: 12; family: "monospace"; weight: Font.Medium }
                             }
-
                             Text {
                                 text: modelData.username || modelData.email || "—"
                                 color: "#3a3a3a"
-                                font.pixelSize: 10
-                                font.family: "monospace"
+                                font { pixelSize: 10; family: "monospace" }
                                 elide: Text.ElideRight
-                                width: 240
+                                width: listRoot.width - 110
                             }
                         }
 
@@ -507,6 +415,6 @@ Item {
         const q = filterInput.text.trim()
         if (q.length === 0) return
         listRoot.filterActive = true
-        listRoot.filterRequested(filterTypeGroup.selected, q)
+        listRoot.filterRequested(listRoot.selectedFilterType, q)
     }
 }

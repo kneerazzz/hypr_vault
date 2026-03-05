@@ -9,19 +9,17 @@ const command    = process.argv[2];
 const jsonOutput = process.argv.includes('--json');
 
 /**
- * Read master password from stdin.
- * QML sets Process.stdin = pass + "\n" before running.
- * Never passed via argv or env vars.
+ * Read master password from the VAULT_MASTER_KEY environment variable.
+ *
+ * Security properties:
+ *  - Never appears in argv (not visible in `ps aux`)
+ *  - Env var is scoped to this child process only (set by QML Process.environment)
+ *  - Not written to disk or logs
+ *  - Parent process (Quickshell) controls exactly which env vars are forwarded
  */
-function readStdin() {
-    return new Promise((resolve, reject) => {
-        let data = "";
-        process.stdin.setEncoding("utf8");
-
-        process.stdin.on("data", chunk => data += chunk);
-        process.stdin.on("end", () => resolve(data.trim()));
-        process.stdin.on("error", reject);
-    });
+function getMasterPassword() {
+    const pass = process.env.VAULT_MASTER_KEY || "";
+    return pass;
 }
 
 async function main() {
@@ -35,20 +33,21 @@ async function main() {
             }
 
             case 'login': {
-                const masterPassword = await readStdin();
+                const masterPassword = getMasterPassword();
                 if (!masterPassword) throw new Error("No master password provided.");
                 const vault = getVault();
                 if (vault.length > 0) {
                     const probe = getCredential(vault[0].id);
                     decryptPassword(probe.encrypted_password, probe.iv, probe.auth_tag, masterPassword);
                 }
+                // Empty vault always succeeds — first-time setup
                 process.stdout.write(JSON.stringify({ success: true }) + '\n');
                 break;
             }
 
             case 'get': {
                 const id = process.argv[3];
-                const masterPassword = await readStdin();
+                const masterPassword = getMasterPassword();
                 if (!id)             throw new Error("Missing id argument.");
                 if (!masterPassword) throw new Error("No master password provided.");
                 const item = getCredential(id);
@@ -71,7 +70,7 @@ async function main() {
                 const url        = (!process.argv[6] || process.argv[6] === "SKIP") ? null : process.argv[6];
                 let   password   = process.argv[7];
                 const genOptions = process.argv[8];
-                const masterPassword = await readStdin();
+                const masterPassword = getMasterPassword();
                 if (!service)        throw new Error("Missing service argument.");
                 if (!username)       throw new Error("Missing username argument.");
                 if (!masterPassword) throw new Error("No master password provided.");
@@ -96,7 +95,7 @@ async function main() {
                 const email       = process.argv[6];
                 const url         = process.argv[7];
                 const newPassword = process.argv[8];
-                const masterPassword = await readStdin();
+                const masterPassword = getMasterPassword();
                 if (!id)             throw new Error("Missing id argument.");
                 if (!masterPassword) throw new Error("No master password provided.");
                 const updates = {};
@@ -107,7 +106,7 @@ async function main() {
                 if (newPassword && newPassword !== "SKIP") {
                     const locked = encryptPassword(newPassword, masterPassword);
                     updates.encrypted_password = locked.encrypted_password;
-                    updates.iv      = locked.iv;
+                    updates.iv       = locked.iv;
                     updates.auth_tag = locked.auth_tag;
                 }
                 updateCredential(id, updates);
@@ -130,7 +129,7 @@ async function main() {
 
             case 'delete': {
                 const id = process.argv[3];
-                const masterPassword = await readStdin();
+                const masterPassword = getMasterPassword();
                 if (!id)             throw new Error("Missing id argument.");
                 if (!masterPassword) throw new Error("No master password provided.");
                 const vault = getVault();
