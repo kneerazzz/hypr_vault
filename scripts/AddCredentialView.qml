@@ -27,15 +27,74 @@ Item {
         addEmail.clear()
         addUrl.clear()
         addPassword.clear()
-        addRoot.genMode    = false
-        addRoot.statusMsg  = ""
-        addRoot.isSaving   = false
+        addRoot.genMode      = false
+        addRoot.statusMsg    = ""
+        addRoot.isSaving     = false
         showPassRect.checked = false
-        // Reset gen options to defaults
-        genLength.value    = 18
-        genUppercase.on    = true
-        genNumbers.on      = true
-        genSymbols.on      = true
+        genLength.value      = 18
+        genLowercase.on      = true
+        genUppercase.on      = true
+        genNumbers.on        = true
+        genSymbols.on        = true
+    }
+
+    // ── Live generation process ────────────────────────────────────
+    // Spawns node just to call generateStrongPassword with current options.
+    // Runs immediately when ⚡ is clicked and on every settings change.
+    Process {
+        id: genProcess
+        property string buf: ""
+
+        stdout: SplitParser { onRead: data => genProcess.buf += data }
+        stderr: SplitParser { onRead: data => {} }
+
+        onExited: (code) => {
+            if (code === 0) {
+                const result = genProcess.buf.trim()
+                try {
+                    const parsed = JSON.parse(result)
+                    if (parsed.password) addPassword.setValue(parsed.password)
+                } catch(e) {
+                    // fallback: raw output
+                    if (result) addPassword.setValue(result)
+                }
+            }
+            genProcess.buf = ""
+        }
+    }
+
+    Timer {
+        id: genTimer
+        interval: 80   // short debounce so rapid +/- clicks don't flood processes
+        onTriggered: {
+            if (!addRoot.genMode) return
+            if (genProcess.running) return   // previous still running, skip
+            genProcess.buf = ""
+            // Pass GENERATE + options via a dummy add-like call is clunky;
+            // instead call a dedicated generate subcommand if present,
+            // otherwise use the inline generate path with a throwaway add.
+            // We use a separate small inline node script for zero latency:
+            genProcess.environment = ({})
+            genProcess.command = [
+                "node", "--input-type=module",
+                "--eval",
+                "import { generateStrongPassword } from '"
+                    + addRoot.scriptDir + "generate.js';\n"
+                + "const p = generateStrongPassword({"
+                + "  length: "      + genLength.value    + ","
+                + "  useLowercase: " + genLowercase.on   + ","
+                + "  useUppercase: " + genUppercase.on   + ","
+                + "  useNumbers: "   + genNumbers.on     + ","
+                + "  useSymbols: "   + genSymbols.on
+                + "});\n"
+                + "process.stdout.write(JSON.stringify({ password: p }) + '\\n');"
+            ]
+            genProcess.running = true
+        }
+    }
+
+    function requestGenerate() {
+        if (addRoot.genMode) genTimer.restart()
     }
 
     // ── Add process ────────────────────────────────────────────────
@@ -118,12 +177,13 @@ Item {
                         EditField {
                             id: addPassword
                             width: parent.width - 82
-                            placeholder: addRoot.genMode ? "will be generated" : "password"
+                            placeholder: addRoot.genMode ? "generating…" : "password"
                             isPassword: !showPassRect.checked
+                            // In gen mode the field is read-only display
                             enabled: !addRoot.genMode
                         }
 
-                        // Show/hide
+                        // Show/hide toggle
                         Rectangle {
                             id: showPassRect
                             property bool checked: false
@@ -144,7 +204,7 @@ Item {
                             }
                         }
 
-                        // Generate toggle
+                        // ⚡ Generate toggle
                         Rectangle {
                             width: 38; height: 40; radius: 5
                             color: addRoot.genMode ? "#0d1a0d" : (genBtn.containsMouse ? "#141414" : "#0a0a0a")
@@ -167,7 +227,12 @@ Item {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     addRoot.genMode = !addRoot.genMode
-                                    if (addRoot.genMode) addPassword.clear()
+                                    if (addRoot.genMode) {
+                                        showPassRect.checked = true   // show generated pass by default
+                                        requestGenerate()
+                                    } else {
+                                        addPassword.clear()
+                                    }
                                 }
                             }
                         }
@@ -176,23 +241,19 @@ Item {
                     // ── Generator options panel (collapsible) ──────
                     Item {
                         width: parent.width
-                        height: addRoot.genMode ? genOptionsCol.height + 12 : 0
+                        height: addRoot.genMode ? genOptionsCol.height + 16 : 0
                         clip: true
-                        Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                        Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
                         Column {
                             id: genOptionsCol
                             width: parent.width
-                            y: 8
-                            spacing: 10
+                            y: 10
+                            spacing: 12
 
-                            // Divider
-                            Rectangle {
-                                width: parent.width; height: 1
-                                color: "#141414"
-                            }
+                            Rectangle { width: parent.width; height: 1; color: "#141414" }
 
-                            // Length slider row
+                            // Length row
                             Row {
                                 width: parent.width
                                 spacing: 10
@@ -205,7 +266,6 @@ Item {
                                     width: 52
                                 }
 
-                                // Minus
                                 Rectangle {
                                     width: 24; height: 24; radius: 4
                                     anchors.verticalCenter: parent.verticalCenter
@@ -221,11 +281,15 @@ Item {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: if (genLength.value > 8) genLength.value--
+                                        onClicked: {
+                                            if (genLength.value > 8) {
+                                                genLength.value--
+                                                requestGenerate()
+                                            }
+                                        }
                                     }
                                 }
 
-                                // Length display
                                 Rectangle {
                                     width: 36; height: 24; radius: 4
                                     anchors.verticalCenter: parent.verticalCenter
@@ -239,7 +303,6 @@ Item {
                                     }
                                 }
 
-                                // Plus
                                 Rectangle {
                                     width: 24; height: 24; radius: 4
                                     anchors.verticalCenter: parent.verticalCenter
@@ -255,36 +318,67 @@ Item {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: if (genLength.value < 64) genLength.value++
+                                        onClicked: {
+                                            if (genLength.value < 64) {
+                                                genLength.value++
+                                                requestGenerate()
+                                            }
+                                        }
                                     }
                                 }
 
-                                // Hidden state holder
-                                QtObject {
-                                    id: genLength
-                                    property int value: 18
+                                // Regenerate button
+                                Rectangle {
+                                    width: 28; height: 24; radius: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: regenArea.containsMouse ? "#1a1a1a" : "#0f0f0f"
+                                    border.color: "#1a1a1a"; border.width: 1
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "↺"; color: "#4ade80"
+                                        font { pixelSize: 13; family: "monospace" }
+                                    }
+                                    MouseArea {
+                                        id: regenArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: requestGenerate()
+                                    }
                                 }
+
+                                QtObject { id: genLength; property int value: 18 }
                             }
 
-                            // Toggle row — Uppercase / Numbers / Symbols
+                            // Character set toggles: a-z  A-Z  0-9  !@#
                             Row {
                                 width: parent.width
                                 spacing: 6
 
                                 Repeater {
+                                    // model is an array of plain objects — read label and id name
                                     model: [
-                                        { label: "A-Z",  obj: genUppercase },
-                                        { label: "0-9",  obj: genNumbers   },
-                                        { label: "!@#",  obj: genSymbols   }
+                                        { label: "a-z", stateId: "genLowercase" },
+                                        { label: "A-Z", stateId: "genUppercase" },
+                                        { label: "0-9", stateId: "genNumbers"   },
+                                        { label: "!@#", stateId: "genSymbols"   }
                                     ]
+
                                     delegate: Rectangle {
                                         required property var modelData
-                                        width: (parent.width - 12) / 3
+                                        required property int index
+
+                                        // Map index → the right QtObject
+                                        readonly property QtObject stateObj: [
+                                            genLowercase, genUppercase, genNumbers, genSymbols
+                                        ][index]
+
+                                        width: (parent.width - 18) / 4
                                         height: 28; radius: 5
-                                        color: modelData.obj.on
+                                        color: stateObj.on
                                                ? "#0d1a0d"
                                                : (togArea.containsMouse ? "#141414" : "#0a0a0a")
-                                        border.color: modelData.obj.on ? "#1e3a1e" : "#141414"
+                                        border.color: stateObj.on ? "#1e3a1e" : "#141414"
                                         border.width: 1
                                         Behavior on color        { ColorAnimation { duration: 120 } }
                                         Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -292,7 +386,7 @@ Item {
                                         Text {
                                             anchors.centerIn: parent
                                             text: modelData.label
-                                            color: modelData.obj.on ? "#4ade80" : "#444444"
+                                            color: stateObj.on ? "#4ade80" : "#444444"
                                             font { pixelSize: 10; family: "monospace"; letterSpacing: 1 }
                                             Behavior on color { ColorAnimation { duration: 120 } }
                                         }
@@ -301,26 +395,33 @@ Item {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: modelData.obj.on = !modelData.obj.on
+                                            onClicked: {
+                                                stateObj.on = !stateObj.on
+                                                requestGenerate()
+                                            }
                                         }
                                     }
                                 }
 
-                                // State holders at Item scope so clearAll() can reach them
+                                // State holders — must be at this Item scope so clearAll() reaches them
+                                QtObject { id: genLowercase; property bool on: true }
                                 QtObject { id: genUppercase; property bool on: true }
                                 QtObject { id: genNumbers;   property bool on: true }
                                 QtObject { id: genSymbols;   property bool on: true }
                             }
 
-                            // Preview hint
+                            // Live preview hint
                             Text {
                                 width: parent.width
-                                text: "generates " + genLength.value + "-char password  "
-                                    + (genUppercase.on ? "A-Z " : "")
-                                    + (genNumbers.on   ? "0-9 " : "")
-                                    + (genSymbols.on   ? "!@# " : "")
-                                    + "a-z"
-                                color: "#2a3a2a"
+                                text: {
+                                    let chars = ""
+                                    if (genLowercase.on) chars += "a-z "
+                                    if (genUppercase.on) chars += "A-Z "
+                                    if (genNumbers.on)   chars += "0-9 "
+                                    if (genSymbols.on)   chars += "!@# "
+                                    return genLength.value + " chars  ·  " + chars.trim()
+                                }
+                                color: "#253525"
                                 font { pixelSize: 9; family: "monospace"; letterSpacing: 0.5 }
                                 elide: Text.ElideRight
                             }
@@ -331,7 +432,7 @@ Item {
 
             Item { height: 8 }
 
-            // Status message
+            // Status / error message
             Item {
                 width: parent.width
                 height: addRoot.statusMsg.length > 0 ? statusText.height + 8 : 0
@@ -352,7 +453,7 @@ Item {
             Rectangle { width: parent.width; height: 1; color: "#141414" }
             Item { height: 16 }
 
-            // Cancel / Save buttons
+            // Cancel / Save
             Row {
                 width: parent.width
                 spacing: 8
@@ -416,26 +517,18 @@ Item {
         const email = addEmail.currentValue.trim() || "SKIP"
         const url   = addUrl.currentValue.trim()   || "SKIP"
 
-        let pass       = "SKIP"
-        let genOptions = "SKIP"
-
-        if (addRoot.genMode) {
-            pass = "GENERATE"
-            // genOptions format expected by index.js: "length,symbols,numbers,uppercase"
-            genOptions = genLength.value + ","
-                       + genSymbols.on   + ","
-                       + genNumbers.on   + ","
-                       + genUppercase.on
-        } else {
-            pass = addPassword.currentValue || "GENERATE"
-        }
+        // In gen mode: use the already-generated password sitting in the field.
+        // We send it as a literal password (not GENERATE) so the exact shown
+        // password is what gets stored — user already saw it and can copy it.
+        const pass = addPassword.currentValue.trim() || "GENERATE"
 
         addRoot.isSaving  = true
         addRoot.statusMsg = ""
 
         addTimer.pendingCommand = [
             "node", addRoot.scriptDir + "index.js", "add",
-            svc, uname, email, url, pass, genOptions
+            svc, uname, email, url, pass
+            // no genOptions arg needed — pass is already the final string
         ]
         addTimer.restart()
     }

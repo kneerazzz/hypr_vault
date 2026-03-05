@@ -1,66 +1,70 @@
 import QtQuick
 
 Item {
-    id: fieldRoot
+id: fieldRoot
+    property string label: ""
+    property string value: ""
+    property bool copyable: false
+    property bool dimmed: false
 
-    property string label:    ""
-    property string value:    ""
-    property bool   copyable: false
-    property bool   dimmed:   false
-
-    height: 56
+    height: 70
 
     Column {
         anchors.fill: parent
-        spacing: 5
+        anchors.margins: 6
+        spacing: 8
 
         Text {
             text: fieldRoot.label
-            color: "#252525"
-            font.pixelSize: 9
+            color: "#6b6b6b"
+            font.pixelSize: 12
             font.family: "monospace"
-            font.letterSpacing: 2
+            font.letterSpacing: 3
         }
 
         Rectangle {
             width: parent.width
-            height: 38
-            radius: 5
-            color: "#0c0c0c"
-            border.color: "#141414"
+            height: 42
+            radius: 6
+            color: "#111111"
+            border.color: "#1f1f1f"
             border.width: 1
 
             Row {
-                anchors {
-                    fill: parent
-                    leftMargin: 12
-                    rightMargin: 8
-                }
-                spacing: 8
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 10
+                spacing: 10
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: fieldRoot.value
-                    color: fieldRoot.dimmed ? "#2e2e2e" : "#aaaaaa"
-                    font.pixelSize: 12
+                    color: fieldRoot.dimmed ? "#555555" : "#e5e5e5"
+                    font.pixelSize: 15
                     font.family: "monospace"
                     font.italic: fieldRoot.dimmed
                     elide: Text.ElideRight
-                    width: parent.width - (fieldRoot.copyable ? 40 : 8)
+                    width: parent.width - (fieldRoot.copyable ? 44 : 10)
                 }
 
                 Rectangle {
                     visible: fieldRoot.copyable
-                    width: 28; height: 24; radius: 4
+                    width: 30
+                    height: 26
+                    radius: 5
                     anchors.verticalCenter: parent.verticalCenter
-                    color: copyArea.containsMouse ? "#1a1a1a" : "transparent"
-                    Behavior on color { ColorAnimation { duration: 100 } }
+                    color: copyArea.containsMouse ? "#1f1f1f" : "transparent"
+
+                    Behavior on color {
+                        ColorAnimation { duration: 120 }
+                    }
 
                     Text {
                         id: copyIcon
                         anchors.centerIn: parent
-                        text: "⎘"; color: "#333333"
-                        font.pixelSize: 11
+                        text: "⎘"
+                        color: "#7a7a7a"
+                        font.pixelSize: 13
                     }
 
                     MouseArea {
@@ -68,13 +72,15 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
+
                         onClicked: {
-                            // Use Qt's clipboard — works in all Quickshell versions
-                            textCopier.text  = fieldRoot.value
+                            textCopier.text = fieldRoot.value
                             textCopier.selectAll()
                             textCopier.copy()
-                            copyIcon.text  = "✓"
+
+                            copyIcon.text = "✓"
                             copyIcon.color = "#4ade80"
+
                             resetTimer.restart()
                         }
                     }
@@ -82,15 +88,16 @@ Item {
                     Timer {
                         id: resetTimer
                         interval: 1500
-                        onTriggered: { copyIcon.text = "⎘"; copyIcon.color = "#333333" }
+                        onTriggered: {
+                            copyIcon.text = "⎘"
+                            copyIcon.color = "#7a7a7a"
+                        }
                     }
                 }
             }
         }
     }
 
-    // Hidden TextEdit used as clipboard bridge — selectAll + copy() is
-    // guaranteed to work regardless of Quickshell Clipboard API version
     TextEdit {
         id: textCopier
         visible: false

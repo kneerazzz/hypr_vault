@@ -1,66 +1,135 @@
 import QtQuick
 
 Item {
-    id: loginRoot
+id: loginRoot
 
     signal loginRequested(string password)
 
-    // Parent controls these
-    property bool   busy:      false
+    property bool busy: false
     property string errorText: ""
-    property bool   shaking:   false
+    property bool shaking: false
+
+    property string displayError: ""
+    property string footerLine: ""
+    property bool unlocked: false
 
     function clearField() { passwordField.text = "" }
-    function focusField()  { passwordField.forceActiveFocus() }
+    function focusField() { passwordField.forceActiveFocus() }
 
     onVisibleChanged: if (visible) Qt.callLater(focusField)
 
-    // ── Shake ──────────────────────────────────────────────────────
+    Component.onCompleted: {
+        const lines = [
+            "restricted access",
+            "classified storage",
+            "authorized users only",
+            "encrypted vault",
+            "trust nothing",
+            "secure memory",
+            "protected archive",
+            "silence is security",
+            "keep it secret",
+            "secrets worth dying for"
+        ]
+
+        footerLine = lines[Math.floor(Math.random() * lines.length)]
+    }
+
+    onErrorTextChanged: {
+        if (errorText !== "") {
+
+            const teases = [
+                "access denied.",
+                "authentication failed.",
+                "incorrect password.",
+                "credentials rejected.",
+                "that wasn't the key.",
+                "invalid authorization.",
+                "vault remains locked.",
+                "permission denied.",
+                "wrong credentials.",
+                "security check failed.",
+                "nice guess.",
+                "system unimpressed.",
+                "denied by security.",
+                "this vault isn't that easy.",
+                "not even close.",
+                "attempt recorded.",
+                "brute force won't help.",
+                "authentication mismatch.",
+                "try harder."
+            ]
+
+            displayError = teases[Math.floor(Math.random() * teases.length)]
+            shaking = true
+        } else {
+            displayError = ""
+        }
+    }
+
     SequentialAnimation {
-        id: shakeAnim
         running: loginRoot.shaking
         loops: 1
+
         NumberAnimation { target: contentCol; property: "x"; to: -10; duration: 45 }
-        NumberAnimation { target: contentCol; property: "x"; to:  10; duration: 45 }
-        NumberAnimation { target: contentCol; property: "x"; to:  -6; duration: 45 }
-        NumberAnimation { target: contentCol; property: "x"; to:   6; duration: 45 }
-        NumberAnimation { target: contentCol; property: "x"; to:   0; duration: 45 }
+        NumberAnimation { target: contentCol; property: "x"; to: 10; duration: 45 }
+        NumberAnimation { target: contentCol; property: "x"; to: -6; duration: 45 }
+        NumberAnimation { target: contentCol; property: "x"; to: 6; duration: 45 }
+        NumberAnimation { target: contentCol; property: "x"; to: 0; duration: 45 }
+
         ScriptAction { script: loginRoot.shaking = false }
     }
 
-    // ── Layout ─────────────────────────────────────────────────────
     Column {
         id: contentCol
         anchors.centerIn: parent
         width: Math.min(parent.width - 48, 300)
         spacing: 0
 
-        // Lock icon
         Item {
             width: parent.width
             height: 80
 
             Item {
-                width: 40; height: 44
+                width: 40
+                height: 44
                 anchors.centerIn: parent
 
-                Rectangle {           // shackle
-                    x: 8; y: 0
-                    width: 24; height: 20; radius: 12
+                Rectangle {
+                    id: shackle
+                    x: 8
+                    y: loginRoot.unlocked ? -8 : 0
+                    width: 24
+                    height: 20
+                    radius: 12
                     color: "transparent"
-                    border.color: loginRoot.busy ? "#4a4a4a" : "#333333"
+                    border.color: "#888888"
                     border.width: 3
-                    Behavior on border.color { ColorAnimation { duration: 300 } }
+
+                    Behavior on y {
+                        NumberAnimation {
+                            duration: 250
+                            easing.type: Easing.OutCubic
+                        }
+                    }
                 }
-                Rectangle {           // body
-                    x: 0; y: 16
-                    width: 40; height: 28; radius: 4
-                    color: "#141414"
-                    border.color: "#222222"; border.width: 1
-                    Rectangle {       // keyhole
+
+                Rectangle {
+                    x: 0
+                    y: 16
+                    width: 40
+                    height: 28
+                    radius: 4
+                    color: "#1a1a1a"
+                    border.color: "#333333"
+                    border.width: 1
+
+                    Rectangle {
                         anchors.centerIn: parent
-                        width: 6; height: 6; radius: 3
-                        color: "#2e2e2e"
+                        width: 6
+                        height: 6
+                        radius: 3
+                        color: "#444444"
                     }
                 }
             }
@@ -70,96 +139,143 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: "VAULT ACCESS"
-            color: "#d0d0d0"
-            font { pixelSize: 15; family: "monospace"; letterSpacing: 4; weight: Font.Light }
+            color: "#ffffff"
+
+            font {
+                pixelSize: 16
+                family: "monospace"
+                letterSpacing: 5
+                weight: Font.Medium
+            }
         }
 
-        Item { height: 6 }
+        Item { height: 8 }
 
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: "enter master password"
-            color: "#444444"
-            font { pixelSize: 11; family: "monospace"; letterSpacing: 1.5 }
+            text: "Never Trust neer"
+            color: "#888888"
+
+            font {
+                pixelSize: 11
+                family: "monospace"
+                letterSpacing: 2
+            }
         }
 
         Item { height: 28 }
 
-        // Password field
         Rectangle {
-            width: parent.width; height: 48; radius: 6
-            color: "#0f0f0f"
-            border.color: passwordField.activeFocus ? "#2a2a2a" : "#161616"
+            width: parent.width
+            height: 48
+            radius: 6
+            color: "#111111"
+            border.color: passwordField.activeFocus ? "#4a4a4a" : "#222222"
             border.width: 1
-            Behavior on border.color { ColorAnimation { duration: 150 } }
 
             Row {
-                anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
                 spacing: 10
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "▸"
-                    color: passwordField.activeFocus ? "#555555" : "#252525"
-                    font.pixelSize: 10
-                    Behavior on color { ColorAnimation { duration: 150 } }
+                    color: passwordField.activeFocus ? "#888888" : "#444444"
+                    font.pixelSize: 12
                 }
+
                 TextInput {
                     id: passwordField
                     width: parent.width - 28
                     anchors.verticalCenter: parent.verticalCenter
                     echoMode: TextInput.Password
                     passwordCharacter: "•"
-                    color: "#e0e0e0"
-                    font { pixelSize: 15; family: "monospace"; letterSpacing: 3 }
-                    selectionColor: "#2a2a2a"
-                    clip: true
+                    color: "#ffffff"
                     enabled: !loginRoot.busy
+
+                    font {
+                        pixelSize: 16
+                        family: "monospace"
+                        letterSpacing: 4
+                    }
+
                     Keys.onReturnPressed: submitPassword()
-                    Keys.onEnterPressed:  submitPassword()
+                    Keys.onEnterPressed: submitPassword()
+                }
+
+                Rectangle {
+                    width: 2
+                    height: passwordField.height * 0.6
+                    color: "#cccccc"
+                    visible: passwordField.activeFocus
+                    anchors.verticalCenter: passwordField.verticalCenter
+
+                    SequentialAnimation on opacity {
+                        loops: Animation.Infinite
+                        running: passwordField.activeFocus
+                        NumberAnimation { to: 0; duration: 450 }
+                        NumberAnimation { to: 1; duration: 450 }
+                    }
                 }
             }
         }
 
         Item { height: 10 }
 
-        // Error label
         Item {
             width: parent.width
-            height: loginRoot.errorText.length > 0 ? 20 : 0
+            height: loginRoot.displayError.length > 0 ? 24 : 0
             clip: true
-            Behavior on height { NumberAnimation { duration: 180 } }
 
             Text {
-                width: parent.width
+                anchors.fill: parent
+                anchors.leftMargin: 6
+                anchors.rightMargin: 6
                 horizontalAlignment: Text.AlignHCenter
-                text: loginRoot.errorText
-                color: "#cc4444"
-                font { pixelSize: 11; family: "monospace"; letterSpacing: 1 }
+                text: loginRoot.displayError
+                color: "#e05555"
+
+                font {
+                    pixelSize: 11
+                    family: "monospace"
+                    letterSpacing: 1.5
+                }
             }
         }
 
-        Item { height: loginRoot.errorText.length > 0 ? 8 : 14 }
+        Item { height: loginRoot.displayError.length > 0 ? 8 : 14 }
 
-        // Unlock button
         Rectangle {
-            width: parent.width; height: 44; radius: 6
-            color: loginRoot.busy ? "#0e0e0e"
-                   : (btnArea.containsMouse ? "#1a1a1a" : "#111111")
-            border.color: loginRoot.busy ? "#181818"
-                          : (btnArea.containsMouse ? "#2a2a2a" : "#1a1a1a")
+            width: parent.width
+            height: 44
+            radius: 6
+
+            color: loginRoot.busy
+                ? "#111111"
+                : (btnArea.containsMouse ? "#222222" : "#161616")
+
+            border.color: loginRoot.busy
+                        ? "#222222"
+                        : (btnArea.containsMouse ? "#444444" : "#2a2a2a")
+
             border.width: 1
-            Behavior on color        { ColorAnimation { duration: 150 } }
-            Behavior on border.color { ColorAnimation { duration: 150 } }
 
             Text {
                 anchors.centerIn: parent
                 text: loginRoot.busy ? "VERIFYING…" : "UNLOCK"
-                color: loginRoot.busy ? "#383838" : "#aaaaaa"
-                font { pixelSize: 11; family: "monospace"; letterSpacing: 3; weight: Font.Medium }
-                Behavior on color { ColorAnimation { duration: 150 } }
+                color: loginRoot.busy ? "#555555" : "#cccccc"
+
+                font {
+                    pixelSize: 12
+                    family: "monospace"
+                    letterSpacing: 4
+                    weight: Font.Medium
+                }
             }
+
             MouseArea {
                 id: btnArea
                 anchors.fill: parent
@@ -170,27 +286,63 @@ Item {
             }
         }
 
-        Item { height: 24 }
+        Item { height: 28 }
 
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: "secrets worth dying for"
-            color: "#2a2a2a"
-            font { pixelSize: 10; family: "monospace"; letterSpacing: 2; italic: true }
+            anchors.leftMargin: 6
+            anchors.rightMargin: 6
+            text: loginRoot.footerLine
+            color: "#555555"
+
+            font {
+                pixelSize: 12
+                family: "monospace"
+                letterSpacing: 2
+                italic: true
+            }
         }
     }
 
-    // ── Internal ───────────────────────────────────────────────────
+    Rectangle {
+        anchors.fill: parent
+        opacity: 0.06
+        z: 100
+        color: "transparent"
+
+        Repeater {
+            model: parent.height / 3
+
+            Rectangle {
+                width: parent.width
+                height: 1
+                y: index * 3
+                color: "#ffffff"
+                opacity: 0.15
+            }
+        }
+    }
+
     function submitPassword() {
-        // Never trim — passwords may have meaningful spaces
+
         const pass = passwordField.text
+
         if (pass.length === 0) {
-            loginRoot.shaking = true
+
+            const emptyMsgs = [
+                "password required.",
+                "input cannot be empty.",
+                "enter credentials first.",
+                "no password detected.",
+                "provide authentication key."
+            ]
+
+            displayError = emptyMsgs[Math.floor(Math.random() * emptyMsgs.length)]
+            shaking = true
             return
         }
-        // Parent decides success/failure; it calls clearField() on success
-        // or sets errorText + shaking on failure
+
         loginRequested(pass)
     }
 }

@@ -15,7 +15,7 @@ Item {
     property bool   isDecrypting:      false
     property string errorMessage:      ""
 
-    // Which confirmation dialog is open: "" | "show" | "delete"
+    // Which confirmation dialog is open: "" | "show" | "delete" | "save" | "copy"
     property string confirmMode: ""
 
     signal deleteRequested(int id)
@@ -36,11 +36,9 @@ Item {
     }
 
     // ── Helpers ────────────────────────────────────────────────────
-    // Safely read a nullable field from the credential object
     function fieldValue(key) {
         if (!credential) return ""
         const v = credential[key]
-        // db returns null or empty string for unset fields
         if (v === null || v === undefined || v === "" || v === "null") return ""
         return String(v)
     }
@@ -52,7 +50,6 @@ Item {
     }
 
     // ── Processes ──────────────────────────────────────────────────
-
     Process {
         id: decryptProcess
         property string buf: ""
@@ -119,8 +116,7 @@ Item {
     TextEdit { id: clipHelper; visible: false; text: "" }
 
     // ══════════════════════════════════════════════════════════════
-    // MASTER PASSWORD CONFIRM OVERLAY
-    // Used for both "show password" and "delete" actions
+    // MASTER PASSWORD / TRICK CONFIRM OVERLAY
     // ══════════════════════════════════════════════════════════════
     Rectangle {
         id: confirmOverlay
@@ -138,20 +134,28 @@ Item {
             Text {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
-                text: detailRoot.confirmMode === "delete"
-                      ? "DELETE CREDENTIAL"
-                      : "REVEAL PASSWORD"
+                text: {
+                    if (detailRoot.confirmMode === "delete") return "DELETE CREDENTIAL"
+                    if (detailRoot.confirmMode === "save")   return "SAVE CHANGES"
+                    if (detailRoot.confirmMode === "copy")   return "COPY PASSWORD"
+                    return "REVEAL PASSWORD"
+                }
                 color: detailRoot.confirmMode === "delete" ? "#cc4444" : "#d0d0d0"
                 font { pixelSize: 12; family: "monospace"; letterSpacing: 3 }
             }
 
-            // Subtitle
+            // Subtitle (Kept vague for the trick words)
             Text {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
-                text: detailRoot.confirmMode === "delete"
-                      ? (detailRoot.credential ? "\"" + detailRoot.credential.service + "\" will be permanently removed" : "")
-                      : "enter master password to view"
+                text: {
+                    if (detailRoot.confirmMode === "delete") {
+                        return detailRoot.credential ? "\"" + detailRoot.credential.service + "\" will be permanently removed" : ""
+                    }
+                    if (detailRoot.confirmMode === "save") return "enter master password to confirm update"
+                    if (detailRoot.confirmMode === "copy") return "enter passcode to copy"
+                    return "enter passcode to view"
+                }
                 color: "#3a3a3a"
                 font { pixelSize: 10; family: "monospace"; letterSpacing: 0.5 }
                 wrapMode: Text.WordWrap
@@ -195,7 +199,6 @@ Item {
                     }
                 }
 
-                // Focus when overlay appears
                 onVisibleChanged: {
                     if (visible) {
                         confirmPassInput.text  = ""
@@ -247,16 +250,32 @@ Item {
 
                 Rectangle {
                     width: (parent.width - 8) / 2; height: 40; radius: 6
-                    color: detailRoot.confirmMode === "delete"
-                           ? (confirmOkArea.containsMouse ? "#1a0a0a" : "#110808")
-                           : (confirmOkArea.containsMouse ? "#0d1a0d" : "#0a120a")
-                    border.color: detailRoot.confirmMode === "delete" ? "#2a1010" : "#1a2a1a"
+                    
+                    color: {
+                        if (detailRoot.confirmMode === "delete") return confirmOkArea.containsMouse ? "#1a0a0a" : "#110808"
+                        if (detailRoot.confirmMode === "save")   return confirmOkArea.containsMouse ? "#0a121a" : "#081014"
+                        return confirmOkArea.containsMouse ? "#0d1a0d" : "#0a120a"
+                    }
+                    border.color: {
+                        if (detailRoot.confirmMode === "delete") return "#2a1010"
+                        if (detailRoot.confirmMode === "save")   return "#101a2a"
+                        return "#1a2a1a"
+                    }
                     border.width: 1
 
                     Text {
                         anchors.centerIn: parent
-                        text: detailRoot.confirmMode === "delete" ? "DELETE" : "REVEAL"
-                        color: detailRoot.confirmMode === "delete" ? "#883333" : "#4ade80"
+                        text: {
+                            if (detailRoot.confirmMode === "delete") return "DELETE"
+                            if (detailRoot.confirmMode === "save")   return "SAVE"
+                            if (detailRoot.confirmMode === "copy")   return "COPY"
+                            return "REVEAL"
+                        }
+                        color: {
+                            if (detailRoot.confirmMode === "delete") return "#883333"
+                            if (detailRoot.confirmMode === "save")   return "#4aa9de"
+                            return "#4ade80"
+                        }
                         font { pixelSize: 10; family: "monospace"; letterSpacing: 2 }
                     }
                     MouseArea {
@@ -337,7 +356,6 @@ Item {
                 width: parent.width
                 spacing: 14
 
-                // USERNAME
                 DetailField {
                     width: parent.width
                     label: "USERNAME"
@@ -345,7 +363,6 @@ Item {
                     copyable: detailRoot.fieldValue("username") !== ""
                 }
 
-                // EMAIL
                 DetailField {
                     width: parent.width
                     label: "EMAIL"
@@ -357,7 +374,6 @@ Item {
                     dimmed:   detailRoot.fieldValue("email") === ""
                 }
 
-                // URL
                 DetailField {
                     width: parent.width
                     label: "URL"
@@ -410,13 +426,12 @@ Item {
                                 }
                             }
 
-                            // Show/hide — requires master password confirm
+                            // Show/hide — requires "see" trick password
                             Rectangle {
                                 width: 28; height: 24; radius: 4
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: eyeArea.containsMouse ? "#1a1a1a" : "transparent"
                                 Behavior on color { ColorAnimation { duration: 100 } }
-                                // Only shown once decrypted
                                 visible: detailRoot.decryptedPassword.length > 0
 
                                 Text {
@@ -433,17 +448,15 @@ Item {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         if (detailRoot.passwordVisible) {
-                                            // Hide — no confirm needed
                                             detailRoot.passwordVisible = false
                                         } else {
-                                            // Show — require master password
                                             detailRoot.confirmMode = "show"
                                         }
                                     }
                                 }
                             }
 
-                            // Copy password
+                            // Copy password — requires "copy" trick password
                             Rectangle {
                                 width: 28; height: 24; radius: 4
                                 anchors.verticalCenter: parent.verticalCenter
@@ -461,12 +474,7 @@ Item {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        detailRoot.copyToClipboard(detailRoot.decryptedPassword)
-                                        copyPassIcon.text  = "✓"
-                                        copyPassIcon.color = "#4ade80"
-                                        copyPassReset.restart()
-                                    }
+                                    onClicked: detailRoot.confirmMode = "copy"
                                 }
                                 Timer {
                                     id: copyPassReset
@@ -554,12 +562,14 @@ Item {
                     }
 
                     EditField {
-                        id: editService;  width: parent.width; placeholder: "service"
+                        id: editService;  width: parent.width; placeholder: "service name *"
                         initialValue: detailRoot.fieldValue("service")
+                        required: true
                     }
                     EditField {
-                        id: editUsername; width: parent.width; placeholder: "username"
+                        id: editUsername; width: parent.width; placeholder: "username *"
                         initialValue: detailRoot.fieldValue("username")
+                        required: true
                     }
                     EditField {
                         id: editEmail;    width: parent.width; placeholder: "email (optional)"
@@ -591,7 +601,19 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: commitUpdate()
+
+                            onClicked: {
+
+                                // validate required fields
+                                const serviceValid  = editService.validate()
+                                const usernameValid = editUsername.validate()
+
+                                if (!serviceValid || !usernameValid) {
+                                    return
+                                }
+
+                                detailRoot.confirmMode = "save"
+                            }
                         }
                     }
                 }
@@ -607,17 +629,21 @@ Item {
         const entered = confirmPassInput.text
         if (entered.length === 0) return
 
-        // Verify the entered password matches the stored master password
-        // We compare directly since masterPassword is already verified at login
-        if (entered !== detailRoot.masterPassword) {
-            confirmError.text = "incorrect password"
+        const mode = detailRoot.confirmMode
+        
+        // Determine which password we expect based on the action
+        let expectedPassword = detailRoot.masterPassword // Default to actual master password for delete/save
+        if (mode === "show") expectedPassword = "see"
+        if (mode === "copy") expectedPassword = "copy"
+
+        if (entered !== expectedPassword) {
+            confirmError.text = "incorrect passcode"
             confirmPassInput.text = ""
-            // Shake the input
             shakeAnim.restart()
             return
         }
 
-        const mode = detailRoot.confirmMode
+        // Authentication passed
         detailRoot.confirmMode = ""
         confirmPassInput.text  = ""
         confirmError.text      = ""
@@ -626,6 +652,14 @@ Item {
             detailRoot.passwordVisible = true
         } else if (mode === "delete") {
             detailRoot.deleteRequested(detailRoot.credential.id)
+        } else if (mode === "save") {
+            detailRoot.commitUpdate()
+        } else if (mode === "copy") {
+            // Execute the clipboard copy and trigger the visual feedback
+            detailRoot.copyToClipboard(detailRoot.decryptedPassword)
+            copyPassIcon.text  = "✓"
+            copyPassIcon.color = "#4ade80"
+            copyPassReset.restart()
         }
     }
 
@@ -639,17 +673,33 @@ Item {
     }
 
     function commitUpdate() {
+
         if (!credential) return
-        const svc   = editService.currentValue.trim()  || "SKIP"
-        const uname = editUsername.currentValue.trim() || "SKIP"
-        const mail  = editEmail.currentValue.trim()    || "SKIP"
-        const url   = editUrl.currentValue.trim()      || "SKIP"
-        const pass  = editPassword.currentValue        || "SKIP"
+
+        // Final safety validation
+        if (!editService.validate() || !editUsername.validate()) {
+            detailRoot.editMode = true
+            return
+        }
+
+        const svc   = editService.currentValue.trim()
+        const uname = editUsername.currentValue.trim()
+        const mail  = editEmail.currentValue.trim() || "SKIP"
+        const url   = editUrl.currentValue.trim()   || "SKIP"
+        const pass  = editPassword.currentValue     || "SKIP"
 
         updateTimer.pendingCommand = [
-            "node", detailRoot.scriptDir + "index.js", "update",
-            String(credential.id), svc, uname, mail, url, pass
+            "node",
+            detailRoot.scriptDir + "index.js",
+            "update",
+            String(credential.id),
+            svc,
+            uname,
+            mail,
+            url,
+            pass
         ]
+
         updateTimer.restart()
     }
 }

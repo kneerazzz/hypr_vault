@@ -56,14 +56,14 @@ Item {
 
                     Rectangle {
                         visible: root.currentView !== "login"
-                        width: 28; height: 28; radius: 6
+                        width: 36; height: 36; radius: 6
                         color: backArea.containsMouse ? "#1a1a1a" : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
 
                         Text {
                             anchors.centerIn: parent
                             text: "←"; color: "#666666"
-                            font { pixelSize: 16; family: "monospace" }
+                            font { pixelSize: 20; family: "monospace" }
                         }
                         MouseArea {
                             id: backArea
@@ -84,7 +84,7 @@ Item {
                         Text {
                             text: "HYPR-VAULT"
                             color: "#e8e8e8"
-                            font { pixelSize: 13; family: "monospace"; letterSpacing: 3; weight: Font.Medium }
+                            font { pixelSize: 16; family: "monospace"; letterSpacing: 3; weight: Font.Medium }
                         }
                     }
 
@@ -95,9 +95,36 @@ Item {
                         color: root.currentView === "login" ? "#333333" : "#4ade80"
                         Behavior on color { ColorAnimation { duration: 400 } }
                     }
+
+                    Rectangle {
+                        width: 36
+                        height: 36
+                        radius: 6
+                        color: closeArea.containsMouse ? "#2a1212" : "transparent"
+
+                        Behavior on color { ColorAnimation { duration: 120 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "✕"
+                            color: closeArea.containsMouse ? "#ff6b6b" : "#666666"
+                            font {
+                                pixelSize: 16
+                                family: "monospace"
+                            }
+                        }
+
+                        MouseArea {
+                            id: closeArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+
+                            onClicked: quitVault()
+                        }
+                    }
                 }
             }
-
             // ── View container ─────────────────────────────────────
             Item {
                 Layout.fillWidth: true
@@ -234,6 +261,32 @@ Item {
         id: errorClearTimer
         interval: 2500
         onTriggered: loginView.errorText = ""
+    }
+
+    //Shortcut
+    Shortcut {
+        sequence: "Ctrl+L"
+        onActivated: lockVault()
+    }
+    Shortcut {
+        sequence: "Ctrl+N"
+        onActivated: {
+            if(root.currentView !== "login"){
+                root.currentView = "addform"
+            }
+            else {
+                root.currentView = "login"
+            }
+        }
+    }
+    Shortcut {
+        sequence: "escape"
+        onActivated: navigateBack() 
+    }
+
+    Shortcut {
+        sequence: "Ctrl+T"
+        onActivated: quitVault()
     }
 
     // ── LIST — no password needed ──────────────────────────────────
@@ -389,6 +442,21 @@ Item {
         statusClearTimer.restart()
     }
 
+    function lockVault() {
+        // If we are already logged out, do nothing
+        if (root.currentView === "login") return
+        
+        // Wipe sensitive data from memory and reset views
+        root.masterPassword     = ""
+        root.credentials        = []
+        root.selectedCredential = null
+        root.currentView        = "login"
+        
+        // Optional: Give visual feedback
+        root.statusMessage      = "vault locked"
+        statusClearTimer.restart()
+    }
+
     function navigateBack() {
         if (root.currentView === "detail" || root.currentView === "addform") {
             root.currentView        = "list"
@@ -398,5 +466,19 @@ Item {
             root.masterPassword = ""
             root.credentials    = []
         }
+    }
+
+    function quitVault() {
+        // Stop running processes
+        if (loginProcess.running)  loginProcess.running  = false
+        if (listProcess.running)   listProcess.running   = false
+        if (filterProcess.running) filterProcess.running = false
+        if (deleteProcess.running) deleteProcess.running = false
+
+        root.masterPassword     = ""
+        root.credentials        = []
+        root.selectedCredential = null
+
+        Qt.quit()
     }
 }

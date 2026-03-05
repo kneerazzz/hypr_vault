@@ -56,7 +56,7 @@ function getCredential(id) {
 
 function getVault() {
     try {
-        const stmt = db.prepare(`SELECT id, service, username, email FROM vault ORDER BY service ASC`);
+        const stmt = db.prepare(`SELECT id, service, username, email, url FROM vault ORDER BY service ASC`);
         return stmt.all();
     } catch (error) {
         throw new Error(`Error getting vault: ${error.message}`);

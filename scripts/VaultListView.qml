@@ -39,7 +39,7 @@ Item {
 
                 // Filter toggle
                 Rectangle {
-                    width: 36; height: 32; radius: 6
+                    width: 40; height: 36; radius: 6
                     color: filterPanel.visible
                            ? "#1a1a1a"
                            : (filterToggleArea.containsMouse ? "#141414" : "transparent")
@@ -51,7 +51,7 @@ Item {
                         anchors.centerIn: parent
                         text: "⊟"
                         color: filterPanel.visible ? "#aaaaaa" : "#444444"
-                        font.pixelSize: 14
+                        font.pixelSize: 16
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     MouseArea {
@@ -59,7 +59,14 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: filterPanel.visible = !filterPanel.visible
+                        onClicked: {
+                            if (filterPanel.visible) {
+                                listRoot.closeFilterPanel()
+                            } else {
+                                filterPanel.visible = true
+                                filterInput.forceActiveFocus()
+                            }
+                        }
                     }
                 }
 
@@ -68,16 +75,16 @@ Item {
                     text: listRoot.filterActive
                           ? listRoot.credentials.length + " filtered"
                           : listRoot.credentials.length + " entries"
-                    color: "#333333"
-                    font { pixelSize: 11; family: "monospace"; letterSpacing: 1 }
+                    color: "#555555"
+                    font { pixelSize: 14; family: "monospace"; letterSpacing: 1 }
                 }
 
                 Item { Layout.fillWidth: true }
 
                 // Add button
                 Rectangle {
-                    height: 32
-                    width: addLabel.width + 24
+                    height: 36
+                    width: addLabel.width + 28
                     radius: 6
                     color: addArea.containsMouse ? "#1c1c1c" : "#141414"
                     border.color: addArea.containsMouse ? "#2a2a2a" : "#1a1a1a"
@@ -88,8 +95,8 @@ Item {
                     Row {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: "+"; color: "#666666"; font { pixelSize: 16; family: "monospace" } }
-                        Text { id: addLabel; text: "ADD"; color: "#666666"; font { pixelSize: 11; family: "monospace"; letterSpacing: 2 } }
+                        Text { text: "+"; color: "#666666"; font { pixelSize: 17; family: "monospace" } }
+                        Text { id: addLabel; text: "ADD"; color: "#666666"; font { pixelSize: 12; family: "monospace"; letterSpacing: 2 } }
                     }
                     MouseArea {
                         id: addArea
@@ -107,6 +114,7 @@ Item {
             id: filterPanel
             Layout.fillWidth: true
             height: 0
+            Layout.preferredHeight: height
             visible: false
             color: "#090909"
             clip: true
@@ -160,8 +168,8 @@ Item {
                                 anchors.centerIn: parent
                                 text: modelData
                                 color: listRoot.selectedFilterType === modelData
-                                       ? "#aaaaaa" : "#444444"
-                                font { pixelSize: 10; family: "monospace"; letterSpacing: 1 }
+                                       ? "#aaaaaa" : "#555555"
+                                font { pixelSize: 14; family: "monospace"; letterSpacing: 1 }
                             }
                             MouseArea {
                                 id: pillArea
@@ -174,7 +182,7 @@ Item {
                     }
                 }
 
-                // Search input + GO
+                // Search input + GO — UNCHANGED
                 Row {
                     width: parent.width
                     spacing: 8
@@ -190,16 +198,17 @@ Item {
                             anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
                             verticalAlignment: TextInput.AlignVCenter
                             color: "#cccccc"
-                            font { pixelSize: 12; family: "monospace" }
+                            font { pixelSize: 14; family: "monospace" }
                             clip: true
                             Keys.onReturnPressed: doFilter()
+                            Keys.onEscapePressed: listRoot.closeFilterPanel()
 
                             Text {
                                 anchors.fill: parent
                                 verticalAlignment: Text.AlignVCenter
                                 text: "search..."
-                                color: "#2a2a2a"
-                                font { pixelSize: 12; family: "monospace" }
+                                color: "#444444"
+                                font { pixelSize: 14; family: "monospace" }
                                 visible: filterInput.text.length === 0
                             }
                         }
@@ -213,8 +222,8 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "GO"
-                            color: "#555555"
-                            font { pixelSize: 10; family: "monospace"; letterSpacing: 2 }
+                            color: "#777777"
+                            font { pixelSize: 12; family: "monospace"; letterSpacing: 2 }
                         }
                         MouseArea {
                             id: goArea
@@ -331,7 +340,7 @@ Item {
                     required property int index
 
                     width: ListView.view.width
-                    height: 56
+                    height: 62
                     color: itemArea.containsMouse ? "#0f0f0f" : "transparent"
                     Behavior on color { ColorAnimation { duration: 100 } }
 
@@ -357,32 +366,36 @@ Item {
 
                         // Avatar badge
                         Rectangle {
-                            width: 32; height: 32; radius: 6
+                            width: 36; height: 36; radius: 7
                             anchors.verticalCenter: parent.verticalCenter
                             color: "#0f0f0f"
                             border.color: "#1a1a1a"; border.width: 1
 
+                            // ── CHANGED: brighter avatar letter ──
                             Text {
                                 anchors.centerIn: parent
                                 text: (modelData.service || "?").charAt(0).toUpperCase()
-                                color: "#555555"
-                                font { pixelSize: 13; family: "monospace"; weight: Font.Medium }
+                                color: "#aaaaaa"
+                                font { pixelSize: 15; family: "monospace"; weight: Font.Medium }
                             }
                         }
 
                         Column {
                             anchors.verticalCenter: parent.verticalCenter
-                            spacing: 2
+                            spacing: 3
 
+                            // ── CHANGED: matches detail panel service name ──
                             Text {
                                 text: modelData.service || "—"
-                                color: "#d0d0d0"
-                                font { pixelSize: 12; family: "monospace"; weight: Font.Medium }
+                                color: "#e8e8e8"
+                                font { pixelSize: 15; family: "monospace"; weight: Font.Medium }
                             }
+
+                            // ── CHANGED: matches detail panel sub-label ──
                             Text {
                                 text: modelData.username || modelData.email || "—"
-                                color: "#3a3a3a"
-                                font { pixelSize: 10; family: "monospace" }
+                                color: "#888888"
+                                font { pixelSize: 12; family: "monospace" }
                                 elide: Text.ElideRight
                                 width: listRoot.width - 110
                             }
@@ -390,11 +403,12 @@ Item {
 
                         Item { Layout.fillWidth: true }
 
+                        // ── CHANGED: more visible arrow ──
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "›"
-                            color: itemArea.containsMouse ? "#444444" : "#1e1e1e"
-                            font.pixelSize: 18
+                            color: itemArea.containsMouse ? "#aaaaaa" : "#444444"
+                            font.pixelSize: 20
                             Behavior on color { ColorAnimation { duration: 100 } }
                         }
                     }
@@ -411,10 +425,32 @@ Item {
         }
     }
 
+    //Shortcut
+    Shortcut {
+        sequence: "Ctrl+F"
+        onActivated: {
+            if(listRoot.filterActive){
+                listRoot.closeFilterPanel()
+            }
+            else {
+                filterPanel.visible = true
+                filterInput.forceActiveFocus()
+            }
+        }
+    }
+
     function doFilter() {
         const q = filterInput.text.trim()
         if (q.length === 0) return
         listRoot.filterActive = true
         listRoot.filterRequested(listRoot.selectedFilterType, q)
+    }
+    function closeFilterPanel() {
+        filterPanel.visible = false
+        if (listRoot.filterActive) {
+            listRoot.filterActive = false
+            filterInput.text = ""
+            listRoot.resetFilter()
+        }
     }
 }
