@@ -1,358 +1,279 @@
 # hypr-vault
 
-A dark, minimal password manager for Hyprland built with **QuickShell (QML)** and a **Node.js backend**.
-Passwords are encrypted at rest using **AES-256-GCM** with **scrypt key derivation**.
-
-The vault opens as a **separate window on the right side of the screen**, designed to be lightweight and keyboard-friendly.
+A dark, minimal password manager widget for Hyprland built with QuickShell (QML) and a Node.js backend. Passwords are encrypted at rest using AES-256-GCM with scrypt key derivation. The UI sits as a fixed panel on the right side of your screen.
 
 ---
 
-# Project Structure
+## Project Structure
 
 ```
 /home/llyod/Documents/Projects/hypr_vault/
-├── launch.sh
+├── launch.sh                  ← Run this to start the widget
 ├── README.md
-├── scripts/
-│   ├── shell.qml
-│   ├── VaultWidget.qml
-│   ├── LoginView.qml
-│   ├── VaultListView.qml
-│   ├── CredentialDetailView.qml
-│   ├── AddCredentialView.qml
-│   ├── DetailField.qml
-│   └── EditField.qml
-└── src/
+├── scripts/                   ← QuickShell entry point (-c points here)
+│   ├── shell.qml              ← PanelWindow definition (size, layer, anchors)
+│   ├── VaultWidget.qml        ← Root controller — view routing, all processes
+│   ├── LoginView.qml          ← Master password entry screen
+│   ├── VaultListView.qml      ← Credential list with filter panel
+│   ├── CredentialDetailView.qml ← Detail, edit, delete, show, copy
+│   ├── AddCredentialView.qml  ← New credential form with live password generator
+│   ├── DetailField.qml        ← Read-only labelled field with copy button
+│   └── EditField.qml          ← Editable input with validation and show/hide
+└── src/                       ← Node.js backend
     ├── package.json
-    ├── index.js
-    ├── db.js
-    ├── crypto.js
-    └── generate.js
+    ├── index.js               ← CLI dispatcher for all vault commands
+    ├── db.js                  ← SQLite CRUD via better-sqlite3
+    ├── crypto.js              ← AES-256-GCM encrypt/decrypt + scrypt key derivation
+    └── generate.js            ← Cryptographically random password generator
 ```
 
----
-
-# Data Storage
-
-Vault data is stored inside:
-
+Vault data is stored at:
 ```
 ~/.config/hypr-vault/
+├── vault.db      (SQLite database, chmod 600)
+└── salt.txt      (scrypt salt, chmod 600)
 ```
-
-Files created automatically:
-
-```
-vault.db   ← SQLite database
-salt.txt   ← scrypt salt
-```
-
-Permissions are restricted:
-
-```
-chmod 600
-```
-
-This ensures **only your user account can access the vault data**.
 
 ---
 
-# Setup
+## Setup
 
-## 1 Install dependencies
+### 1. Install Node dependencies
 
-```
+```bash
 cd /home/llyod/Documents/Projects/hypr_vault/src
 npm install
 ```
 
----
+### 2. Make the launch script executable
 
-## 2 Make launcher executable
-
-```
+```bash
 chmod +x /home/llyod/Documents/Projects/hypr_vault/launch.sh
 ```
 
----
+### 3. Launch
 
-## 3 Launch the vault
-
-```
+```bash
 bash /home/llyod/Documents/Projects/hypr_vault/launch.sh
 ```
 
----
+### 4. Bind to a Hyprland key (optional)
 
-## Optional Hyprland Keybind
+Add to `~/.config/hypr/hyprland.conf`:
 
-Add to:
-
+```conf
+bind = $mainMod, V, exec, bash /home/llyod/Documents/Projects/hypr_vault/launch.sh
 ```
-~/.config/hypr/hyprland.conf
-```
-
-```
-bind = $mainMod, H, exec, bash /home/llyod/Documents/Projects/hypr_vault/launch.sh
-```
-
-Press **Super + H** to open the vault.
 
 ---
 
-# Usage Flow
+## Usage Flow
 
 ```
-Launch Vault
+Launch Widget
      │
      ▼
-[LOGIN]
-enter master password
-     │
-     ▼
-[VAULT LIST]
-     │
-     ├── Add new credential
-     ├── Filter credentials
-     └── Open entry
-            │
-            ▼
-       [DETAIL VIEW]
-            │
-     ┌──────┴───────┐
-     ▼              ▼
-  Update         Delete
+[LOGIN] ── enter master password ──► [VAULT LIST]
+                                           │
+                         ┌─────────────────┼──────────────────┐
+                         ▼                 ▼                  ▼
+                    [FILTER]          [ADD NEW]         [CLICK ENTRY]
+                    by service,       fill form               │
+                    username,         ⚡ live gen             ▼
+                    or email          save                [DETAIL VIEW]
+                                                         show/copy/edit
+                                                         /delete
+                                                              │
+                                             ┌───────────────┴──────────────┐
+                                             ▼                              ▼
+                                         [UPDATE]                      [DELETE]
+                                     edit fields,                  master password
+                                     master pass                   confirm, then
+                                     to confirm save               wipe entry
 ```
 
 ---
 
-# Keyboard Shortcuts
+## Keyboard Shortcuts
 
-| Shortcut | Action                   |
-| -------- | ------------------------ |
-| Escape   | Go back to previous view |
-| Ctrl+L   | Lock vault               |
-| Ctrl+N   | Add new credential       |
-| Ctrl+F   | Open filter panel        |
-| Ctrl+T   | Close vault window       |
+| Shortcut   | Action                                                              |
+|------------|---------------------------------------------------------------------|
+| `Escape`   | Navigate back to previous view                                      |
+| `Ctrl+L`   | Lock vault — wipes master password from memory, returns to login    |
 
 ---
 
-# Security Architecture
+## Security Architecture
 
-## Master Password Handling
+### Master password handling
 
-The master password is **never passed as a command line argument**.
-
-Instead it is passed to the Node process using a **temporary environment variable**:
-
-### QML
+The master password is **never passed as a command-line argument** (which would expose it in `ps aux` and `/proc/<pid>/cmdline`). Instead it is passed via environment variable, scoped only to the child Node process:
 
 ```qml
+// QML side — Quickshell Process API
 process.environment = ({ "VAULT_MASTER_KEY": masterPassword })
 process.command     = ["node", "src/index.js", "login"]
 process.running     = true
 ```
 
-### Node
-
 ```javascript
+// Node side — src/index.js
 function getMasterPassword() {
     return process.env.VAULT_MASTER_KEY || "";
 }
 ```
 
-This avoids exposing the password in:
+**Why this is safe:**
+- The env var is set at the OS level after `fork()`, never visible in argv
+- It is scoped only to that single child process — the parent shell never sees it
+- The process lives for milliseconds; the only attack window is `/proc/<pid>/environ` by a process running as the same user, which would mean the attacker already has full user access
 
-```
-ps aux
-/proc/<pid>/cmdline
-```
+### Login verification
 
-The environment variable exists **only for the lifetime of that child process**.
+There is no separate verification file. On login, the vault attempts to decrypt the first existing credential with the provided password. If the password is wrong, AES-256-GCM's auth tag won't match and decryption throws — login fails. On an empty vault (first use), any password succeeds and becomes the master password from the moment the first credential is saved.
 
----
+### Encryption
 
-# Encryption
+- Algorithm: **AES-256-GCM** (authenticated encryption — detects tampering)
+- Key derivation: **scrypt** (`N=32768, r=8, p=1`) — slow by design, resistant to brute force
+- Each password gets a unique random IV
+- Auth tag is stored alongside ciphertext and verified on every decrypt
 
-Passwords are encrypted before being written to disk.
+### Database
 
-Encryption details:
-
-| Feature        | Value                                  |
-| -------------- | -------------------------------------- |
-| Algorithm      | AES-256-GCM                            |
-| Key Derivation | scrypt                                 |
-| Salt           | Random salt stored in `salt.txt`       |
-| Authentication | GCM authentication tag                 |
-| IV             | Random per-entry initialization vector |
-
-AES-GCM provides:
-
-• confidentiality
-• integrity protection
-• tamper detection
-
-If ciphertext or tag is modified, **decryption fails automatically**.
+- SQLite via `better-sqlite3`
+- File stored at `~/.config/hypr-vault/vault.db`
+- `chmod 600` — owner read/write only
+- Stores: `id`, `service`, `username`, `email`, `url`, `encrypted_password`, `iv`, `auth_tag`
+- Plaintext passwords are **never written to disk**
 
 ---
 
-# Database
+## Node.js Backend Commands
 
-SQLite database stored at:
+All commands are invoked as `node src/index.js <command> [args] [--json]`.
 
-```
-~/.config/hypr-vault/vault.db
-```
-
-Table fields:
-
-```
-id
-service
-username
-email
-url
-encrypted_password
-iv
-auth_tag
-```
-
-Important:
-
-• plaintext passwords are **never written to disk**
-• only encrypted values are stored
+| Command                  | Auth required      | Description                           |
+|--------------------------|--------------------|---------------------------------------|
+| `login`                  | `VAULT_MASTER_KEY` | Verify master password by decrypting a probe credential |
+| `list`                   | none               | Return all credentials (no passwords) |
+| `get <id>`               | `VAULT_MASTER_KEY` | Decrypt and return a single password  |
+| `add ...`                | `VAULT_MASTER_KEY` | Encrypt and store a new credential    |
+| `update <id> ...`        | `VAULT_MASTER_KEY` | Update fields on an existing entry    |
+| `delete <id>`            | `VAULT_MASTER_KEY` | Delete a credential after auth        |
+| `filter <type> <query>`  | none               | Search by service / username / email  |
 
 ---
 
-# Backend Commands
+## Password Generator
 
-All commands run through:
+The `generate.js` module uses Node's `crypto.randomInt()` (CSPRNG) to build passwords. Options:
 
-```
-node src/index.js <command>
-```
+| Option         | Default | Range  |
+|----------------|---------|--------|
+| `length`       | 18      | 8 – 64 |
+| `useLowercase` | true    | a-z    |
+| `useUppercase` | true    | A-Z    |
+| `useNumbers`   | true    | 0-9    |
+| `useSymbols`   | true    | !@#$%^ |
 
-Available commands:
+The generator guarantees at least one character from each enabled character class before filling the rest randomly, then shuffles with Fisher-Yates to avoid predictable positions.
 
-| Command  | Description                        |
-| -------- | ---------------------------------- |
-| login    | verify master password             |
-| list     | list credentials                   |
-| get <id> | decrypt and return password        |
-| add      | add new credential                 |
-| update   | update credential                  |
-| delete   | delete credential                  |
-| filter   | search by service, username, email |
+In the UI, clicking ⚡ opens the generator panel and **immediately generates** a password. Adjusting length or toggling character classes re-generates live with an 80ms debounce. A ↺ button lets you regenerate on demand. The generated password is shown in the field before saving — what you see is what gets stored.
 
 ---
 
-# Password Generator
+## QML Architecture
 
-The password generator uses Node's cryptographically secure RNG:
+### View routing
 
-```
-crypto.randomInt()
-```
-
-Options supported:
-
-| Option    | Default |
-| --------- | ------- |
-| length    | 18      |
-| lowercase | enabled |
-| uppercase | enabled |
-| numbers   | enabled |
-| symbols   | enabled |
-
-Features:
-
-• ensures at least **one character from each enabled class**
-• fills remaining characters randomly
-• uses **Fisher-Yates shuffle** to remove positional patterns
-
-Passwords range from **8 to 64 characters**.
-
----
-
-# QML Architecture
-
-The UI follows a **single root controller pattern**.
+`VaultWidget.qml` is the root controller. It owns all `Process` instances and all state. Child views are all mounted simultaneously with `visible` + `opacity` toggled — this avoids re-instantiation cost on navigation.
 
 ```
-VaultWidget
- ├ LoginView
- ├ VaultListView
- ├ CredentialDetailView
- └ AddCredentialView
+VaultWidget (root, "login" | "list" | "detail" | "addform")
+├── LoginView
+├── VaultListView
+├── CredentialDetailView
+└── AddCredentialView
 ```
 
-`VaultWidget.qml` owns:
+### Process pattern
 
-• all state
-• all Node processes
-• view routing
+Every Node command follows the same pattern to avoid Quickshell process re-use timing bugs:
 
-Child views **only emit signals** and never execute backend commands directly.
-
----
-
-# Process Execution Pattern
-
-Every backend call uses a short timer to avoid process reuse issues in QuickShell.
-
-```
+```qml
 Timer {
-    interval: 10
+    id: someTimer
+    interval: 10          // 1-frame delay ensures clean process state
     onTriggered: {
-        process.environment = ({ "VAULT_MASTER_KEY": password })
-        process.command = ["node", scriptDir + "index.js", "command"]
-        process.running = true
+        someProcess.environment = ({ "VAULT_MASTER_KEY": password })
+        someProcess.command     = ["node", scriptDir + "index.js", "command"]
+        someProcess.running     = true
     }
 }
 ```
 
-The delay ensures a **clean process state before execution**.
+### Why environment variables instead of stdin
+
+An earlier version passed the master password via stdin using `process.write()` + EOF signaling. This was abandoned because:
+
+1. Quickshell's `Process` has no `stdin` property — only `stdinEnabled: true` + `write()` method
+2. Node's `readStdin()` blocks until pipe close (EOF) — with `stdinEnabled: true` the pipe stays open forever causing infinite hangs
+3. Environment variables are simpler, equally secure for this threat model, and avoid all async pipe complexity
+
+### Password field auto-clear
+
+`AddCredentialView` calls `clearAll()` on `onVisibleChanged: if (visible)` — every field is wiped each time the add form is opened, preventing stale data from a previous entry appearing in a new form.
+
+### EditField component
+
+`EditField.qml` exposes:
+- `currentValue` — read-only live text
+- `initialValue` — sets text on load and on change
+- `clear()` — wipes the field
+- `setValue(v)` — programmatically fills the field (used by the password generator)
+- `validate()` — checks `required` constraint, sets `errorMessage`
+- `isPassword` — toggles echo mode with a built-in show/hide eye button
+
+### DetailField component
+
+`DetailField.qml` uses a hidden `TextEdit` + `selectAll()` + `copy()` as the clipboard mechanism instead of Quickshell's `Clipboard` singleton, which proved unreliable across versions.
 
 ---
 
-# Clipboard Handling
+## Known Decisions & Trade-offs
 
-Password copying uses a hidden `TextEdit` element:
+| Decision | Reason |
+|----------|--------|
+| Env vars over stdin | Stdin caused indefinite process hangs due to pipe EOF semantics |
+| No verify.bin | Not needed — login probes an existing credential; first-use sets password implicitly on first save |
+| Master password to confirm show/copy/delete | Once logged in, sensitive actions require re-entering the master password — you can hardcode a shorter passcode directly in `CredentialDetailView.qml` if you prefer |
+| All processes in VaultWidget | Centralised state; child views only emit signals, never own processes |
+| 10ms Timer before process start | Prevents Quickshell process re-use race conditions |
+| TextEdit clipboard bridge | `Clipboard.text` from Quickshell was unreliable; native Qt copy always works |
+| Full-height right panel | Panel anchors top+bottom+right, filling the full screen height on the right side |
 
+---
+
+## Customisation
+
+### Change the panel width
+
+Edit `scripts/shell.qml`:
+```qml
+implicitWidth: 480   // panel width in pixels
 ```
-selectAll()
-copy()
+
+### Use a shorter passcode for show / copy / delete
+
+By default, show, copy, and delete all require your full master password. If you want a shorter code to use once you're already logged in, open `scripts/CredentialDetailView.qml` and On Line 636 and 637, respectively. Change the comparison to whatever you want:
+
+
+This is purely a convenience tweak — the vault is already unlocked at this point so the master password has already been verified at login.
+
+### Change the scriptDir path
+
+If you move the project, update the path in every QML file that declares:
+```qml
+readonly property string scriptDir: "/home/llyod/Documents/Projects/hypr_vault/src/"
 ```
-
-This approach is used instead of the QuickShell clipboard API to ensure **consistent behaviour across Qt versions**.
-
----
-
-# Window Behaviour
-
-The vault opens as a **standalone window positioned on the right side of the screen**.
-
-It is not a layer-shell overlay and does not reserve space in the compositor layout.
-
-This allows the vault to behave like a normal floating utility window.
-
----
-
-# Design Philosophy
-
-hypr-vault is designed around a few principles:
-
-• **minimal UI**
-• **keyboard-first workflow**
-• **simple architecture**
-• **strong local encryption**
-
-The goal is to keep the vault **fast, private, and easy to audit**.
-
----
-
-# License
-
-Personal project.
-Use freely and modify as needed.
