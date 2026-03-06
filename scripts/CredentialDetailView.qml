@@ -115,6 +115,13 @@ Item {
     // Hidden clipboard helper
     TextEdit { id: clipHelper; visible: false; text: "" }
 
+    // Auto-clear clipboard after 15 seconds for security
+    Timer {
+        id: clipboardClearTimer
+        interval: 15000 // 15 seconds
+        onTriggered: detailRoot.copyToClipboard("") 
+    }
+
     // ══════════════════════════════════════════════════════════════
     // MASTER PASSWORD / TRICK CONFIRM OVERLAY
     // ══════════════════════════════════════════════════════════════
@@ -660,6 +667,9 @@ Item {
             copyPassIcon.text  = "✓"
             copyPassIcon.color = "#4ade80"
             copyPassReset.restart()
+
+            // Start the 15-second destruction countdown
+            clipboardClearTimer.restart()
         }
     }
 

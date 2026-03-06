@@ -21,6 +21,14 @@ Item {
         anchors.fill: parent
         color: "#0a0a0a"
 
+        // FIXED: The Global Background Activity Catcher is now at the BOTTOM of the visual stack
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            onPositionChanged: if(root.currentView !== "login") autoLockVaultTimer.restart()
+            onClicked: if(root.currentView !== "login") autoLockVaultTimer.restart()
+        }
+
         Rectangle {
             anchors.fill: parent
             opacity: 0.04
@@ -233,6 +241,7 @@ Item {
                 root.masterPassword    = loginTimer.pendingPass
                 loginTimer.pendingPass = ""
                 loginView.clearField()
+                autoLockVaultTimer.restart()
                 loadCredentials()
             } else {
                 root.masterPassword    = ""
@@ -405,6 +414,12 @@ Item {
         onTriggered: root.statusMessage = ""
     }
 
+    Timer {
+        id: autoLockVaultTimer
+        interval: 60000 // 60 seconds
+        onTriggered: autoLockVault()
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // FUNCTIONS
     // ═══════════════════════════════════════════════════════════════
@@ -443,19 +458,32 @@ Item {
     }
 
     function lockVault() {
-        // If we are already logged out, do nothing
         if (root.currentView === "login") return
         
-        // Wipe sensitive data from memory and reset views
         root.masterPassword     = ""
         root.credentials        = []
         root.selectedCredential = null
         root.currentView        = "login"
         
-        // Optional: Give visual feedback
         root.statusMessage      = "vault locked"
         statusClearTimer.restart()
     }
+
+    // FIXED: Function spelling and correct timer restart
+    function autoLockVault(){
+        if(root.currentView === "login") return
+        
+        autoLockVaultTimer.stop()
+        
+        root.masterPassword = ""
+        root.credentials = []
+        root.selectedCredential = null
+        root.currentView = "login"
+
+        root.statusMessage = "No Activity. Vault Locked."
+        statusClearTimer.restart()
+    }
+
 
     function navigateBack() {
         if (root.currentView === "detail" || root.currentView === "addform") {

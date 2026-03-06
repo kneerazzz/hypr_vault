@@ -151,8 +151,9 @@ async function main() {
                 process.exit(1);
         }
     } catch (error) {
+        console.log(error.message)
         await new Promise(r => setTimeout(r, 200 + Math.random() * 100));
-        process.stderr.write(JSON.stringify({ error: error.message }) + '\n');
+        process.stderr.write(error.message + '\n');
         process.exit(1);
     }
 }

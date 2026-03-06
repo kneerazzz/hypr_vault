@@ -3,8 +3,8 @@ import os from 'os'
 import path from 'path'
 
 
-const configDir = path.json(os.homedir, '.config', 'hypr-vault');
-const backupDir = path.json(consfigDir, 'backups');
+const configDir = path.join(os.homedir(), '.config', 'hypr-vault');
+const backupDir = path.join(configDir, 'backups');
 
 export function createBackup() {
     try {
@@ -15,7 +15,7 @@ export function createBackup() {
         const dbPath = path.join(configDir, 'vault.db');
         const saltPath = path.join(configDir, 'salt.txt');
 
-        if(!fs.existsSync(configDir)){
+        if(!fs.existsSync(dbPath)){
             return;
         }
 
@@ -45,14 +45,12 @@ export function createBackup() {
             .sort((a, b) => b.time - a.time);
 
         if(dbBackups.length > 10){
-            const backupsToDelete = dbBackups.slice(5);
+            const backupsToDelete = dbBackups.slice(10);
             backupsToDelete.forEach(backup => {
                 fs.unlinkSync(backup.path);
             });
         }
-        
     } catch (error) {
-        console.error(`Backup Failed: ${error.message}`)
-        
+        console.error(`Backup Failed: ${error.message}`)   
     }
 }

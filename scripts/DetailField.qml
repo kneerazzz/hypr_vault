@@ -1,7 +1,7 @@
 import QtQuick
 
 Item {
-id: fieldRoot
+    id: fieldRoot
     property string label: ""
     property string value: ""
     property bool copyable: false
@@ -82,9 +82,13 @@ id: fieldRoot
                             copyIcon.color = "#4ade80"
 
                             resetTimer.restart()
+                            
+                            // Start the 15-second destruction countdown
+                            clipboardClearTimer.restart()
                         }
                     }
 
+                    // Reverts the icon back from the green checkmark
                     Timer {
                         id: resetTimer
                         interval: 1500
@@ -102,5 +106,16 @@ id: fieldRoot
         id: textCopier
         visible: false
         text: ""
+    }
+
+    // Auto-clear clipboard after 15 seconds
+    Timer {
+        id: clipboardClearTimer
+        interval: 15000 
+        onTriggered: {
+            textCopier.text = ""
+            textCopier.selectAll()
+            textCopier.copy()
+        }
     }
 }
