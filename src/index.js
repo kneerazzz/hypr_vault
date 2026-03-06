@@ -4,6 +4,7 @@ import {
 } from "./db.js";
 import { decryptPassword, encryptPassword } from "./crypto.js";
 import { generateStrongPassword } from "./generate.js";
+import { createBackup } from "./backup.js";
 
 const command    = process.argv[2];
 const jsonOutput = process.argv.includes('--json');
@@ -84,6 +85,7 @@ async function main() {
                 }
                 const locked = encryptPassword(password, masterPassword);
                 addCredential(service, username, email, url, locked.encrypted_password, locked.iv, locked.auth_tag);
+                createBackup();
                 process.stdout.write(JSON.stringify({ success: true, password }) + '\n');
                 break;
             }
@@ -110,6 +112,7 @@ async function main() {
                     updates.auth_tag = locked.auth_tag;
                 }
                 updateCredential(id, updates);
+                createBackup();
                 process.stdout.write(JSON.stringify({ success: true }) + '\n');
                 break;
             }
@@ -138,6 +141,7 @@ async function main() {
                     decryptPassword(probe.encrypted_password, probe.iv, probe.auth_tag, masterPassword);
                 }
                 deleteCredential(id);
+                createBackup();
                 process.stdout.write(JSON.stringify({ success: true, deleted: id }) + '\n');
                 break;
             }

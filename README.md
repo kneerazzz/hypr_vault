@@ -100,6 +100,8 @@ Launch Widget
 |------------|---------------------------------------------------------------------|
 | `Escape`   | Navigate back to previous view                                      |
 | `Ctrl+L`   | Lock vault — wipes master password from memory, returns to login    |
+| `Ctrl+F`   | Open filter panel                                                   |
+| `Ctrl+N`   | Add new Credential                                                  |
 
 ---
 
