@@ -92,10 +92,10 @@ If the UI is unavailable:
 
 ```bash
 # From a Lifeboat bundle
-node src/tools/getYourPass.js vault_lifeboat.json "your_password"
+node tools/getYourPass.js vault_lifeboat.json <pass>
 
 # From a raw database
-node src/tools/recovery.js ~/.config/hypr-vault/vault.db ~/.config/hypr-vault/salt.txt "your_password"
+node tools/recovery.js ~/.config/hypr-vault/vault.db ~/.config/hypr-vault/salt.txt <pass>
 ```
 
 ---
