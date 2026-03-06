@@ -6,7 +6,7 @@ import Quickshell.Io
 Item {
     id: root
 
-    // Views: "login" | "list" | "detail" | "addform"
+    // Views: "login" | "list" | "detail" | "addform" | "settings"
     property string currentView:        "login"
     property string masterPassword:     ""
     property var    credentials:        []
@@ -21,7 +21,6 @@ Item {
         anchors.fill: parent
         color: "#0a0a0a"
 
-        // FIXED: The Global Background Activity Catcher is now at the BOTTOM of the visual stack
         MouseArea {
             anchors.fill: parent
             hoverEnabled: true
@@ -97,6 +96,28 @@ Item {
                     }
 
                     Item { Layout.fillWidth: true }
+
+                    // Settings Button
+                    Rectangle {
+                        visible: root.currentView !== "login" && root.currentView !== "settings"
+                        width: 36; height: 36; radius: 6
+                        color: settingsArea.containsMouse ? "#1a1a1a" : "transparent"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "⚙"
+                            color: settingsArea.containsMouse ? "#aaaaaa" : "#666666"
+                            font.pixelSize: 18
+                        }
+                        MouseArea {
+                            id: settingsArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.currentView = "settings"
+                        }
+                    }
 
                     Rectangle {
                         width: 6; height: 6; radius: 3
@@ -192,6 +213,28 @@ Item {
                         loadCredentials()
                     }
                 }
+
+                SettingsView {
+                    id: settingsPage
+                    anchors.fill: parent
+                    visible:  root.currentView === "settings"
+                    opacity:  root.currentView === "settings" ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                    onVerifyRequested: {
+                        verifyProcess.environment = ({ "VAULT_MASTER_KEY": root.masterPassword })
+                        verifyProcess.command = ["node", root.scriptDir + "index.js", "verify"]
+                        verifyProcess.running = true
+                    }
+                    onExportRequested: (path) => {
+                        exportProcess.command = ["node", root.scriptDir + "index.js", "export", path]
+                        exportProcess.running = true
+                    }
+                    onImportRequested: (path) => {
+                        importProcess.command = ["node", root.scriptDir + "index.js", "import", path]
+                        importProcess.running = true
+                    }
+                }
             }
 
             // ── Status bar ─────────────────────────────────────────
@@ -218,10 +261,6 @@ Item {
 
     // ═══════════════════════════════════════════════════════════════
     // PROCESSES
-    // Master password is passed via VAULT_MASTER_KEY env var.
-    // - Invisible to `ps aux` (not in argv)
-    // - Scoped only to the spawned child process
-    // - Quickshell Process.environment sets vars for that run only
     // ═══════════════════════════════════════════════════════════════
 
     // ── LOGIN ──────────────────────────────────────────────────────
@@ -230,7 +269,7 @@ Item {
         property string buf: ""
 
         stdout: SplitParser { onRead: data => loginProcess.buf += data }
-        stderr: SplitParser { onRead: data => {} }
+        stderr: SplitParser { onRead: data => root.statusMessage = "backend error: " + data.trim() }
 
         onExited: (code) => {
             const buf = loginProcess.buf
@@ -241,12 +280,13 @@ Item {
                 root.masterPassword    = loginTimer.pendingPass
                 loginTimer.pendingPass = ""
                 loginView.clearField()
+                root.statusMessage     = ""
                 autoLockVaultTimer.restart()
                 loadCredentials()
             } else {
                 root.masterPassword    = ""
                 loginTimer.pendingPass = ""
-                loginView.errorText    = "incorrect password"
+                loginView.errorText    = "failed"
                 loginView.shaking      = true
                 errorClearTimer.restart()
             }
@@ -282,6 +322,17 @@ Item {
         onActivated: {
             if(root.currentView !== "login"){
                 root.currentView = "addform"
+            }
+            else {
+                root.currentView = "login"
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+S"
+        onActivated: {
+            if(root.currentView !== "login"){
+                root.currentView = "settings"
             }
             else {
                 root.currentView = "login"
@@ -408,6 +459,59 @@ Item {
         }
     }
 
+    // ── TOOLS / SETTINGS PROCESSES ─────────────────────────────────
+    Process {
+        id: verifyProcess
+        property string buf: ""
+        stdout: SplitParser { onRead: data => verifyProcess.buf += data }
+        stderr: SplitParser { onRead: data => settingsPage.message = "error: " + data }
+        onExited: (code) => {
+            settingsPage.isBusy = false
+            if (code === 0) {
+                try {
+                    let res = JSON.parse(verifyProcess.buf.trim())
+                    settingsPage.message = res.message
+                } catch(e) { settingsPage.message = verifyProcess.buf }
+            }
+            verifyProcess.buf = ""
+        }
+    }
+
+    Process {
+        id: exportProcess
+        property string buf: ""
+        stdout: SplitParser { onRead: data => exportProcess.buf += data }
+        stderr: SplitParser { onRead: data => settingsPage.message = "error: " + data }
+        onExited: (code) => {
+            settingsPage.isBusy = false
+            if (code === 0) {
+                try {
+                    let res = JSON.parse(exportProcess.buf.trim())
+                    settingsPage.message = `Exported ${res.entries} entries successfully.`
+                } catch(e) { settingsPage.message = "Export completed." }
+            }
+            exportProcess.buf = ""
+        }
+    }
+
+    Process {
+        id: importProcess
+        property string buf: ""
+        stdout: SplitParser { onRead: data => importProcess.buf += data }
+        stderr: SplitParser { onRead: data => settingsPage.message = "error: " + data }
+        onExited: (code) => {
+            settingsPage.isBusy = false
+            if (code === 0) {
+                try {
+                    let res = JSON.parse(importProcess.buf.trim())
+                    settingsPage.message = `Imported ${res.imported} new entries. Skipped ${res.skipped} invalid.`
+                    loadCredentials() // Reload list in background
+                } catch(e) { settingsPage.message = "Import completed." }
+            }
+            importProcess.buf = ""
+        }
+    }
+
     Timer {
         id: statusClearTimer
         interval: 2200
@@ -469,7 +573,6 @@ Item {
         statusClearTimer.restart()
     }
 
-    // FIXED: Function spelling and correct timer restart
     function autoLockVault(){
         if(root.currentView === "login") return
         
@@ -484,9 +587,8 @@ Item {
         statusClearTimer.restart()
     }
 
-
     function navigateBack() {
-        if (root.currentView === "detail" || root.currentView === "addform") {
+        if (root.currentView === "detail" || root.currentView === "addform" || root.currentView === "settings") {
             root.currentView        = "list"
             root.selectedCredential = null
         } else if (root.currentView === "list") {
@@ -497,7 +599,6 @@ Item {
     }
 
     function quitVault() {
-        // Stop running processes
         if (loginProcess.running)  loginProcess.running  = false
         if (listProcess.running)   listProcess.running   = false
         if (filterProcess.running) filterProcess.running = false
