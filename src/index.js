@@ -3,9 +3,11 @@ import {
     deleteCredential, filterVaultByService, filterVaultByUsername, filterVaultByEmail 
 } from "./db.js";
 import { decryptPassword, encryptPassword } from "./crypto.js";
-import { generateStrongPassword } from "./generate.js";
-import { createBackup } from "./backup.js";
+import { generateStrongPassword } from "./utils/generate.js"
+import { createBackup } from "./utils/backup.js";
 import fs from 'fs';
+import crypto from 'crypto'
+
 
 const command    = process.argv[2];
 const jsonOutput = process.argv.includes('--json');
@@ -42,7 +44,6 @@ async function main() {
                 const item = getCredential(id);
                 if (!item) throw new Error(`Credential id=${id} not found.`);
                 
-                // FIXED: Using encrypted_password to match db.js
                 const decrypted = decryptPassword(item.encrypted_password, item.iv, item.auth_tag, masterPassword);
                 
                 if (jsonOutput) {
@@ -73,13 +74,68 @@ async function main() {
                 process.stdout.write(JSON.stringify({ success: true, password }) + '\n');
                 break;
             }
+            case 'update': {
+                const id          = process.argv[3];
+                const service     = process.argv[4];
+                const username    = process.argv[5];
+                const email       = process.argv[6];
+                const url         = process.argv[7];
+                const newPassword = process.argv[8];
+                const masterPassword = getMasterPassword();
+                if (!id)             throw new Error("Missing id argument.");
+                if (!masterPassword) throw new Error("No master password provided.");
+                const updates = {};
+                if (service     && service     !== "SKIP") updates.service  = service;
+                if (username    && username    !== "SKIP") updates.username = username;
+                if (email       && email       !== "SKIP") updates.email    = email;
+                if (url         && url         !== "SKIP") updates.url      = url;
+                if (newPassword && newPassword !== "SKIP") {
+                    const locked = encryptPassword(newPassword, masterPassword);
+                    updates.encrypted_password = locked.encrypted_password;
+                    updates.iv       = locked.iv;
+                    updates.auth_tag = locked.auth_tag;
+                }
+                updateCredential(id, updates);
+                createBackup();
+                process.stdout.write(JSON.stringify({ success: true }) + '\n');
+                break;
+            }
+
+            case 'filter': {
+                const type  = process.argv[3];
+                const query = process.argv[4];
+                if (!type || !query) throw new Error("Usage: filter <service|username|email> <query>");
+                let results = [];
+                if      (type === 'service')  results = filterVaultByService(query);
+                else if (type === 'username') results = filterVaultByUsername(query);
+                else if (type === 'email')    results = filterVaultByEmail(query);
+                else throw new Error(`Invalid filter type: "${type}"`);
+                process.stdout.write(JSON.stringify(results) + '\n');
+                break;
+            }
+
+            case 'delete': {
+                const id = process.argv[3];
+                const masterPassword = getMasterPassword();
+                if (!id)             throw new Error("Missing id argument.");
+                if (!masterPassword) throw new Error("No master password provided.");
+                const vault = getVault();
+                if (vault.length > 0) {
+                    const probe = getCredential(vault[0].id);
+                    decryptPassword(probe.encrypted_password, probe.iv, probe.auth_tag, masterPassword);
+                }
+                deleteCredential(id);
+                createBackup();
+                process.stdout.write(JSON.stringify({ success: true, deleted: id }) + '\n');
+                break;
+            }
+
 
             case 'verify': {
                 const masterPassword = getMasterPassword();
                 if (!masterPassword) throw new Error("No master password provided.");
                 
                 const fullVault = [];
-                // We need the full data (IV/Tags) for verification, getVault() only returns headers
                 const vaultHeaders = getVault();
                 let corruptedList = [];
 
@@ -132,6 +188,52 @@ async function main() {
                 break;
             }
 
+            case 'export-portable': {
+                const outPath = process.argv[3];
+                const masterPassword = getMasterPassword();
+                if(!masterPassword) throw new Error("Authentication Required for secure export")
+
+                const vaultHeaders = getVault();
+                const portableData = vaultHeaders.map(h => {
+                    const item = getCredential(h.id);
+                    const clearText = decryptPassword(item.encrypted_password, item.iv, item.auth_tag, masterPassword);
+                    
+                    const portableKey = crypto.scryptSync(masterPassword, 'hypr-vault-bundle-salt', 32, { N: 2 ** 14, r: 8, p: 1 });
+                    const iv = crypto.randomBytes(12);
+                    const cipher = crypto.createCipheriv('aes-256-gcm', portableKey, iv);
+                    
+                    let enc = cipher.update(clearText, 'utf8', 'hex');
+                    enc += cipher.final('hex');
+                    
+                    return {
+                        service: item.service,
+                        username: item.username,
+                        email: item.email,
+                        url: item.url,
+                        password: enc,
+                        iv: iv.toString('hex'),
+                        auth_tag: cipher.getAuthTag().toString('hex')
+                    };
+                });
+
+
+                const containerJson = JSON.stringify(portableData);
+                const bundleKey = crypto.scryptSync(masterPassword, 'hypr-vault-bundle-salt', 32, { N: 2 ** 14, r: 8, p: 1 });
+                const bIv = crypto.randomBytes(12);
+                const bCipher = crypto.createCipheriv('aes-256-gcm', bundleKey, bIv);
+                
+                let locked = bCipher.update(containerJson, 'utf8', 'hex');
+                locked += bCipher.final('hex');
+
+                fs.writeFileSync(outPath, JSON.stringify({
+                    locked_vault: locked,
+                    iv: bIv.toString('hex'),
+                    auth_tag: bCipher.getAuthTag().toString('hex')
+                }, null, 2));
+
+                process.stdout.write(JSON.stringify({ success: true }) + '\n');
+                break;
+            }
             default:
                 process.exit(1);
         }

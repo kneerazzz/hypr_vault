@@ -251,6 +251,76 @@ Item {
                 }
             }
 
+            // ── PORTABLE RECOVERY EXPORT ──
+            Column {
+                id: portableCol
+                width: parent.width
+                spacing: 8
+                
+                property bool confirming: false
+
+                Text { text: "SECURE PORTABLE BUNDLE"; color: "#d0d0d0"; font { pixelSize: 12; family: "monospace"; letterSpacing: 2 } }
+                
+                Text {
+                    text: portableCol.confirming ? "Confirm Master Password to authorize export:" : "Creates an encrypted .json lifeboat. Safe for USB/Cloud storage."
+                    color: portableCol.confirming ? "#de8a4a" : "#555555"
+                    font { family: "monospace"; pixelSize: 10 }
+                    wrapMode: Text.WordWrap; width: parent.width
+                }
+
+                Rectangle {
+                    width: parent.width; height: 40; radius: 6
+                    color: "#0a0a0a"; border.color: "#1a1a1a"; border.width: 1
+                    TextInput {
+                        id: portableInput
+                        anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: "#cccccc"; font { pixelSize: 12; family: "monospace" }
+                        echoMode: portableCol.confirming ? TextInput.Password : TextInput.Normal
+                        // If not confirming, show path; if confirming, clear for password
+                        text: portableCol.confirming ? "" : root.lastPortablePath
+                        clip: true
+                    }
+                }
+
+                Row {
+                    spacing: 12
+                    Rectangle {
+                        width: 160; height: 36; radius: 6
+                        color: portableArea.containsMouse ? "#1a120a" : "#110a08"
+                        border.color: "#2a1a10"; border.width: 1
+                        Text { 
+                            anchors.centerIn: parent
+                            text: portableCol.confirming ? "CONFIRM & EXPORT" : "CREATE LIFEBOAT"
+                            color: "#de8a4a"; font { pixelSize: 10; family: "monospace" } 
+                        }
+                        MouseArea {
+                            id: portableArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (!portableCol.confirming) {
+                                    // STEP 1: Save the path and switch to password mode
+                                    root.setPortablePath(portableInput.text);
+                                    portableCol.confirming = true;
+                                    portableInput.forceActiveFocus();
+                                } else {
+                                    // STEP 2: Execute the export with the entered password
+                                    root.exportPortableRequested(portableInput.text);
+                                    portableCol.confirming = false;
+                                }
+                            }
+                        }
+                    }
+                    // Cancel button resets the state
+                    Rectangle {
+                        visible: portableCol.confirming
+                        width: 80; height: 36; radius: 6; color: "#1a0a0a"
+                        Text { anchors.centerIn: parent; text: "CANCEL"; color: "#cc4444"; font { pixelSize: 10; family: "monospace" } }
+                        MouseArea { anchors.fill: parent; onClicked: portableCol.confirming = false }
+                    }
+                }
+            }
+
+            
             // ── System Output Message ──
             Text {
                 width: parent.width

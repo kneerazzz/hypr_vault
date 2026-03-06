@@ -79,7 +79,7 @@ Item {
                 "node", "--input-type=module",
                 "--eval",
                 "import { generateStrongPassword } from '"
-                    + addRoot.scriptDir + "generate.js';\n"
+                    + addRoot.scriptDir + "/utils/generate.js';\n"
                 + "const p = generateStrongPassword({"
                 + "  length: "      + genLength.value    + ","
                 + "  useLowercase: " + genLowercase.on   + ","

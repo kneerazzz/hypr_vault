@@ -13,6 +13,8 @@ Item {
     property var    selectedCredential: null
     property string statusMessage:      ""
     property bool   isLoading:          false
+    property string pendingPortablePath: ""
+    property string lastPortablePath: "/home/llyod/Documents/vault/vault_lifeboat.json"
 
     readonly property string scriptDir: "/home/llyod/Documents/Projects/hypr_vault/src/"
 
@@ -511,6 +513,33 @@ Item {
             importProcess.buf = ""
         }
     }
+    Process {
+        id: exportPortableProcess
+        property string buf: ""
+
+        // Capture stdout to detect the JSON success message
+        stdout: SplitParser { 
+            onRead: data => exportPortableProcess.buf += data 
+        }
+        
+        stderr: SplitParser { 
+            onRead: data => settingsPage.message = "error: " + data.trim() 
+        }
+        
+        onExited: (code) => {
+            settingsPage.isBusy = false
+            root.pendingPortablePath = ""
+            if (code === 0) {
+                settingsPage.message = "Portable Lifeboat Created Successfully."
+            } else {
+                // Display error from buf if it contains one
+                if (settingsPage.message.indexOf("error") === -1) {
+                    settingsPage.message = "error: Process failed (code " + code + ")"
+                }
+            }
+            exportPortableProcess.buf = ""
+        }
+    }
 
     Timer {
         id: statusClearTimer
@@ -609,5 +638,23 @@ Item {
         root.selectedCredential = null
 
         Qt.quit()
+    }
+
+    function setPortablePath(path){
+        root.lastPortablePath = path;
+    }
+
+    function exportPortableRequested(confirmedPassword) {
+        if (confirmedPassword === "") {
+            settingsPage.message = "error: password required";
+            return;
+        }
+
+        exportPortableProcess.environment = ({ "VAULT_MASTER_KEY": confirmedPassword })
+        // Use the stored path property
+        exportPortableProcess.command = ["node", root.scriptDir + "index.js", "export-portable", root.lastPortablePath]
+        settingsPage.isBusy = true;
+        settingsPage.message = "Securing vault...";
+        exportPortableProcess.running = true;
     }
 }
