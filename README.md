@@ -10,7 +10,10 @@ A minimal password manager widget for Hyprland built with QuickShell (QML) and a
 - **Live password generator** with length and character class controls
 - **Lifeboat export** — portable double-encrypted bundle, recoverable on any machine with just your master password
 - **Integrity check** — validates every entry's auth tag, detects tampering
+- **Standard Import/Export** — Supports migrating data via standard JSON formats for easy transition between different Database instances
+- **Automated Backups** — Triggers a database backup on every CRUD operation to prevent data loses during system crashes
 - **Standalone recovery** — `recovery.js and getYourPass.js` works without the UI if Hyprland fails
+
 
 ---
 
